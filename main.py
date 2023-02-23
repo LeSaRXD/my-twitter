@@ -4,8 +4,9 @@ from timestamps import *
 import psycopg2
 
 db_user = "lesar"
+db_name = "twitter"
 
-connection = psycopg2.connect(database=db_user, user=db_user)
+connection = psycopg2.connect(database=db_name, user=db_user)
 cur = connection.cursor()
 
 user = None
