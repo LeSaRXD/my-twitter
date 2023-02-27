@@ -13,7 +13,7 @@ user = None
 user_uuid = None
 
 def feed(post_amount: int = 10) -> str:
-	cur.execute("SELECT * FROM posts LIMIT %s", (post_amount, ))
+	cur.execute("SELECT * FROM posts ORDER BY post_time DESC LIMIT %s", (post_amount, ))
 	posts = cur.fetchall()
 	if len(posts) == 0:
 		return "No recent posts"
@@ -53,7 +53,6 @@ def login():
 		print("Logged in!")
 		user = login
 		user_uuid = fetched_user[0]
-		print(user_uuid)
 	else:
 		print("Incorrect password!")
 
