@@ -27,13 +27,9 @@ def get_posts(post_amount: int = 10) -> str:
 	return [{"username": get_username_by_uuid(post["id"]), "body": post["body"], "timestamp": format_timestamp(post["time"])} for post in posts]
 
 # TODO: update post function
-def post(uuid: str, body: str) -> None:
-	if uuid == None:
-		return
-	
-	# check if uuid exists
-	cur.execute("SELECT (id) FROM users LIMIT 1")
-	if cur.fetchone() == None:
+def post(login: str, body: str) -> None:
+	uuid = get_uuid_by_username(login)
+	if not uuid:
 		return
 
 	cur.execute("INSERT INTO posts (id, body) VALUES(%s, %s)", (uuid, body))
@@ -45,6 +41,10 @@ def post(uuid: str, body: str) -> None:
 def get_username_by_uuid(uuid: str) -> str:
 	cur.execute("SELECT (username) FROM users WHERE id=%s LIMIT 1", (uuid, ))
 	return cur.fetchone()["username"]
+
+def get_uuid_by_username(username: str) -> str:
+	cur.execute("SELECT (id) FROM users WHERE username=%s LIMIT 1", (username, ))
+	return cur.fetchone()["id"]
 
 def log_in(login: str, password: str) -> str:
 	cur.execute("SELECT id, password_hash FROM users WHERE username=%s", (login, ))

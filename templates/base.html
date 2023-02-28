@@ -20,6 +20,7 @@
 		<div class="header_right_container">
 			{% if userdata and userdata['login'] %}
 
+			<a class="header_button" href="/post"><button>Create a post</button></a>
 			<a class="header_button" href="/signout"><button>Sign out</button></a>
 			<a class="header_right_container" href="/user/{{ userdata['login'] }}">
 				<h3 id="account_handle">@{{ userdata['login'] }}</h3>

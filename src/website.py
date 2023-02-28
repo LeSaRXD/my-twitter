@@ -1,4 +1,4 @@
-from flask import Flask, Markup, render_template, send_from_directory, request, session, flash, redirect, make_response
+from flask import Flask, Markup, render_template, send_from_directory, request, session, flash, redirect
 from flask_session import Session
 import database
 
@@ -18,10 +18,32 @@ Session(app)
 def send_static(path):
 	return send_from_directory("static", path)
 
-# main page
+
+
+# posts
 @app.route("/")
 def feed():
 	return render_template("feed.html", userdata=session, tweets=database.get_posts(10))
+
+@app.route("/post/", methods=["GET", "POST"])
+def post():
+	if request.method == "GET":
+		if not session.get("login"):
+			return redirect("/")
+		return render_template("post.html", userdata=session)
+
+	login = session["login"]
+	post_body = request.form["body"]
+
+	if not post_body:
+		flash("Please enter something")
+	else:
+		database.post(login, post_body)
+		return redirect("/")
+
+	return render_template("post.html", userdata=session)
+
+
 
 # account
 @app.route("/login/", methods=["GET", "POST"])
@@ -44,8 +66,7 @@ def login():
 			flash("Incorrect login or password")
 		else:
 			session["login"] = login
-			resp = make_response(redirect("/"))
-			return resp
+			return redirect("/")
 
 	return render_template("login.html", userdata=session)
 
@@ -69,8 +90,7 @@ def register():
 			flash("Account with this login already exists")
 		else:
 			session["login"] = login
-			resp = make_response(redirect("/"))
-			return resp
+			return redirect("/")
 
 	return render_template("register.html")
 
@@ -79,8 +99,7 @@ def signout():
 	session.pop("login", None)
 	session.pop("password", None)
 
-	resp = make_response(redirect("/"))
-	return resp
+	return redirect("/")
 
 
 
