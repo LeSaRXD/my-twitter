@@ -4,23 +4,28 @@ import database
 
 
 
+# creating app
 app = Flask(__name__, template_folder="../templates", static_folder="../static")
 app.secret_key = "dev"
+
+# session configuration
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
+# static files
 @app.route("/static/<path:path>")
 def send_static(path):
 	return send_from_directory("static", path)
 
+# main page
 @app.route("/")
 def feed():
-	return render_template("feed.html", tweets=database.get_posts(-1))
+	return render_template("feed.html", userdata=session, tweets=database.get_posts(10))
 
+# account
 @app.route("/login/", methods=["GET", "POST"])
 def login():
-
 	if request.method == "GET":
 		return render_template("login.html")
 	
@@ -40,10 +45,21 @@ def login():
 		else:
 			session["login"] = login
 			resp = make_response(redirect("/"))
-			resp.set_cookie("login", login)
 			return resp
 
-	return render_template("login.html")
+	print(session)
+	return render_template("login.html", userdata=session)
 
+@app.route("/signout/")
+def signout():
+	session.pop("login", None)
+	session.pop("password", None)
+
+	resp = make_response(redirect("/"))
+	return resp
+
+
+
+# launching app
 if __name__ == "__main__":
 	app.run(debug=True)
