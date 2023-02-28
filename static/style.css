@@ -31,7 +31,7 @@ input{
 	border-radius: 5px;
 
 	background: #000;
-	
+
 	color: inherit;
 	font-size: 20px;
 }
@@ -63,14 +63,21 @@ header{
 #header_title{
 	display: inline;
 }
-#header_buttons_container{
+.header_right_container{
+	margin-left: auto;
 	height: 100%;
-	width: 100%;
 	display: flex;
+	flex-direction: row;
 	justify-content: right;
 	align-items: center;
 }
+.header_image{
+	height: 25px;
+}
 .header_button{
+	margin: 5px;
+}
+#account_handle{
 	margin: 5px;
 }
 
@@ -79,4 +86,8 @@ header{
 	height: 100%;
 	display: flex;
 	flex-direction: column;
+}
+
+.profile_image{
+	border-radius: 5px;
 }

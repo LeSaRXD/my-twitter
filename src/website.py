@@ -27,6 +27,8 @@ def feed():
 @app.route("/login/", methods=["GET", "POST"])
 def login():
 	if request.method == "GET":
+		if session.get("login"):
+			return redirect("/")
 		return render_template("login.html")
 	
 	login = request.form["login"]
@@ -34,12 +36,10 @@ def login():
 
 	if not login:
 		flash("Please enter a login")
-		print("NO LOGIN")
 	elif not password:
 		flash("Please enter a password")
-		print("NO PASSWORD")
 	else:
-		uuid = database.login(login, password)
+		uuid = database.log_in(login, password)
 		if not uuid:
 			flash("Incorrect login or password")
 		else:
@@ -47,8 +47,32 @@ def login():
 			resp = make_response(redirect("/"))
 			return resp
 
-	print(session)
 	return render_template("login.html", userdata=session)
+
+@app.route("/register/", methods=["GET", "POST"])
+def register():
+	if request.method == "GET":
+		if session.get("login"):
+			return redirect("/")
+		return render_template("register.html")
+
+	login = request.form["login"]
+	password = request.form["password"]
+
+	if not login:
+		flash("Please enter a login")
+	elif not password:
+		flash("Please enter a password")
+	else:
+		uuid = database.register(login, password)
+		if not uuid:
+			flash("Account with this login already exists")
+		else:
+			session["login"] = login
+			resp = make_response(redirect("/"))
+			return resp
+
+	return render_template("register.html")
 
 @app.route("/signout/")
 def signout():
