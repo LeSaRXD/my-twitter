@@ -1,4 +1,4 @@
-from passwords import *
+import passwords
 from timestamps import *
 import psycopg2
 import psycopg2.extras
@@ -6,8 +6,8 @@ import psycopg2.extras
 db_user = "lesar"
 db_name = "twitter"
 
-connection = psycopg2.connect(database=db_name, user=db_user)
-cur = connection.cursor(cursor_factory=psycopg2.extras.DictCursor)
+conn = psycopg2.connect(database=db_name, user=db_user)
+cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
 def get_username_by_uuid(uuid: str) -> str:
 	cur.execute("SELECT (username) FROM users WHERE id=%s LIMIT 1", (uuid, ))
@@ -33,10 +33,10 @@ def post(uuid: str, body: str) -> None:
 		return
 
 	cur.execute("INSERT INTO posts (id, body) VALUES(%s, %s)", (uuid, body))
-	connection.commit()
+	conn.commit()
 
 def register(login: str, password: str) -> None:
-	cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (login, encode_pw(password)))
+	cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (login, passwords.encode_pw(password)))
 	cur.commit()
 
 def login(login: str, password: str) -> str:
@@ -46,7 +46,10 @@ def login(login: str, password: str) -> str:
 	if account == None:
 		return False
 
-	if not validate_pw(password, account["password_hash"]):
+	if not passwords.validate_pw(password, account["password_hash"]):
 		return False
+
+	cur.execute("UPDATE users SET password_hash=%s", (passwords.encode_pw(password)[0], ))
+	conn.commit()
 	
 	return account["id"]

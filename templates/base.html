@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{% block title %}{% endblock %}</title>
+	<link rel="stylesheet" href="/static/style.css" />
+	{% block styles %}{% endblock %}
+</head>
+<body>
+	{% block header %}
+	<header>
+		<div id="header_logo">
+			<a href="/">
+				<img src="https://cdn3.iconfinder.com/data/icons/2018-social-media-logotypes/1000/2018_social_media_popular_app_logo_twitter-512.png" height="25px">
+				<h1 id="header_title">Twitter</h1>
+			</a>
+		</div>
+		<div id="header_buttons_container">
+			<a class="header_button" href="/login"><button>Login</button></a>
+			<a class="header_button" href="/register"><button>Register</button></a>
+		</div>
+	</header>
+	{% endblock %}
+
+	<div id="content">
+		{% block content %}{% endblock %}
+	</div>
+</body>
+</html>

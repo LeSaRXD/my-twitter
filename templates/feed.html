@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Homepage{% endblock %}
+
+{% block styles %}
+<style>
+
+.tweet{
+	margin: 5px 4px;
+	padding: 8px;
+	border-radius: 10px;
+
+	background: #222;
+}
+.tweet_body{
+	margin: 5px;
+	padding: 5px;
+	border-radius: 7px;
+	
+	background: #444;
+}
+.handle{
+	color: rgb(50, 171, 219);
+	font-weight: bold;
+}
+.timestamp{
+	color: #ccc;
+	float: right;
+}
+
+</style>
+{% endblock %}
+
+
+
+{% block content %}
+
+{% for tweet in tweets %}
+	<div class="tweet">
+		<div class="tweet_header"><a href="/user/{{ tweet['username'] }}/" class="handle">@{{ tweet['username'] }}</a> <span class="timestamp">{{ tweet['timestamp'] }}</span></div>
+		<div class="tweet_body">{{ tweet['body'] }}</div>
+	</div>
+{% endfor %}
+
+{% endblock %}

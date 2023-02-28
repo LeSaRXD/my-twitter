@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block styles %}
+<style>
+
+form{
+	padding-left: 20px;
+}
+#content{
+	justify-content: center;
+	align-items: center;	
+}
+#background{
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: start;
+
+	width: 80%;
+	height: 80%;
+	background: #111;
+	border-radius: 20px;
+}
+#welcome_back{
+	margin: 20px;
+	text-align: center;
+}
+#login_background{
+	flex-grow: 1;
+
+	display: flex;
+	flex-direction: column;
+	justify-content: start;
+	align-items: start;
+
+	margin: 20px;
+	margin-top: 0;
+	padding: 20px;
+	background: #222;
+	border-radius: 20px;
+}
+#submit_container{
+	margin: 20px 0px;
+}
+.alert{
+	padding: 10px 20px;
+	margin: 5px 20px;
+	border-radius: 10px;
+
+	background: #964b4b;
+	color: #fff;
+
+	font-size: 20px;
+}
+
+</style>
+{% endblock %}
+
+
+
+{% block content %}
+
+<div id="background">
+	<div>
+		<h1 id="welcome_back">Welcome back!</h1>
+	</div>
+	<div id="login_background">
+		{% for message in get_flashed_messages() %}
+		<div class="alert">{{ message }}</div>
+		{% endfor %}
+		<form method="post">
+			<h3>Login: </h3>
+			<input class="input_field" type="text" name="login" placeholder="Enter your login here" value="{{ request.form['login'] }}" required />
+			<h3>Password: </h3>
+			<input class="input_field" type="password" name="password" placeholder="Enter your password here" value="{{ request.form['password'] }}" required />
+			<div id="submit_container">
+				<button type="submit">Login</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+{% endblock %}
