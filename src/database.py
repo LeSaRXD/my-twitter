@@ -16,7 +16,18 @@ cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
 
 # posts
-def get_posts(post_amount: int = 10) -> str:
+def db_post_to_dict(post: psycopg2.extras.DictRow) -> dict:
+	return {"id": post["id"], "username": get_username_by_uuid(post["poster_id"]), "body": post["body"], "timestamp": format_timestamp(post["time"]), "likes": post["likes"]}
+
+def get_post(post_id: str) -> dict:
+	cur.execute("SELECT * FROM posts WHERE id=%s", (post_id, ))
+	post = cur.fetchone()
+	if not post:
+		return False
+
+	return db_post_to_dict(post)
+
+def get_posts(post_amount: int = 10) -> list:
 	if post_amount < 0:
 		cur.execute("SELECT * FROM posts ORDER BY time DESC")
 	else:
@@ -24,16 +35,22 @@ def get_posts(post_amount: int = 10) -> str:
 
 	posts = cur.fetchall()
 
-	return [{"username": get_username_by_uuid(post["id"]), "body": post["body"], "timestamp": format_timestamp(post["time"])} for post in posts]
+	return [db_post_to_dict(post) for post in posts]
 
 # TODO: update post function
-def post(login: str, body: str) -> None:
+def post(login: str, body: str) -> bool:
 	uuid = get_uuid_by_username(login)
 	if not uuid:
-		return
+		return False
 
-	cur.execute("INSERT INTO posts (id, body) VALUES(%s, %s)", (uuid, body))
-	conn.commit()
+	try:
+		cur.execute("INSERT INTO posts (id, body) VALUES(%s, %s)", (uuid, body))
+		conn.commit()
+	except:
+		conn.rollback()
+		return False
+
+	return True
 
 
 
@@ -74,3 +91,5 @@ def register(login: str, password: str):
 def update_password(login: str, new_password: str) -> None:
 	cur.execute("UPDATE users SET password_hash=%s WHERE username=%s", (passwords.encode_pw(new_password)[0], login))
 	conn.commit()
+
+

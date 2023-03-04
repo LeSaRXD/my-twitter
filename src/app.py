@@ -4,9 +4,11 @@ import database
 
 
 
+
 # creating app
 app = Flask(__name__, template_folder="../templates", static_folder="../static")
-app.secret_key = "dev"
+with open("../secret_key", "r") as f:
+	app.secret_key = f.read()
 
 # session configuration
 app.config["SESSION_PERMANENT"] = False
@@ -23,14 +25,19 @@ def send_static(path):
 # posts
 @app.route("/")
 def feed():
-	return render_template("feed.html", userdata=session, tweets=database.get_posts(10))
+	return render_template("feed.html", userdata=session, posts=database.get_posts(-1))
+
+@app.route("/tweet/<post>")
+def get_post(post):
+	print(database.get_post(post))
+	return f"<h1>{post}</h1>"
 
 @app.route("/post/", methods=["GET", "POST"])
-def post():
+def create_post():
 	if request.method == "GET":
 		if not session.get("login"):
 			return redirect("/")
-		return render_template("post.html", userdata=session)
+		return render_template("create_post.html", userdata=session)
 
 	login = session["login"]
 	post_body = request.form["body"]
@@ -41,7 +48,7 @@ def post():
 		database.post(login, post_body)
 		return redirect("/")
 
-	return render_template("post.html", userdata=session)
+	return render_template("create_post.html", userdata=session)
 
 
 
@@ -105,4 +112,4 @@ def signout():
 
 # launching app
 if __name__ == "__main__":
-	app.run(debug=True)
+	app.run(debug=True, host="0.0.0.0", port=7777)

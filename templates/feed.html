@@ -5,27 +5,45 @@
 {% block styles %}
 <style>
 
-.tweet{
+.post{
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+
 	margin: 5px 4px;
 	padding: 8px;
 	border-radius: 10px;
 
 	background: #111;
 }
-.tweet_body{
-	margin: 5px;
+.post_header{
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+}
+.post_body{
+	margin: 5px 0px;
 	padding: 5px;
 	border-radius: 7px;
 	
 	background: #222;
 }
+.post_footer{
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+}
+
 .handle{
 	color: rgb(50, 171, 219);
 	font-weight: bold;
 }
-.timestamp{
-	color: #ccc;
-	float: right;
+.post_info_container{
+	color: rgba(255, 255, 255, 0.7);
+	margin-left: auto;
+}
+.semitransparent{
+	color: rgba(255, 255, 255, 0.4);
 }
 
 </style>
@@ -35,10 +53,17 @@
 
 {% block content %}
 
-{% for tweet in tweets %}
-	<div class="tweet">
-		<div class="tweet_header"><a href="/user/{{ tweet['username'] }}/" class="handle">@{{ tweet['username'] }}</a> <span class="timestamp">{{ tweet['timestamp'] }}</span></div>
-		<div class="tweet_body">{{ tweet['body'] }}</div>
+{% for post in posts %}
+	<div class="post">
+		<div class="post_header">
+			<a href="/user/{{ post['username'] }}/" class="handle">@{{ post['username'] }}</a>
+			<span class="post_info_container">{{ post['timestamp'] }}</span>
+		</div>
+		<div class="post_body"><pre>{{ post['body'] }}</pre></div>
+		<div class="post_footer">
+			<pre><b>{{ post['likes'] }}</b> likes</pre>
+			<span class="post_info_container semitransparent"><a href="/post/{{ post['id'] }}">{{ post['id'] }}</a></span>
+		</div>
 	</div>
 {% endfor %}
 
