@@ -1,7 +1,6 @@
-from flask import Flask, Markup, render_template, send_from_directory, request, session, flash, redirect
+from flask import Flask, render_template, send_from_directory, request, session, flash, redirect
 from flask_session import Session
 import database
-
 
 
 
@@ -39,10 +38,12 @@ def create_post():
 			return redirect("/")
 		return render_template("create_post.html", userdata=session)
 
+	# if method == "POST"
+
 	login = session["login"]
 	post_body = request.form["body"]
 
-	if not post_body:
+	if post_body.replace(" ", "") == "":
 		flash("Please enter something")
 	else:
 		database.post(login, post_body)

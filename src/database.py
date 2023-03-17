@@ -37,14 +37,16 @@ def get_posts(post_amount: int = 10) -> list:
 
 	return [db_post_to_dict(post) for post in posts]
 
-# TODO: update post function
 def post(login: str, body: str) -> bool:
+	print("POSTING")
+
 	uuid = get_uuid_by_username(login)
 	if not uuid:
+		print("NO uuid")
 		return False
 
 	try:
-		cur.execute("INSERT INTO posts (id, body) VALUES(%s, %s)", (uuid, body))
+		cur.execute("INSERT INTO posts (poster_id, body) VALUES(%s, %s)", (uuid, body))
 		conn.commit()
 	except:
 		conn.rollback()
@@ -91,5 +93,3 @@ def register(login: str, password: str):
 def update_password(login: str, new_password: str) -> None:
 	cur.execute("UPDATE users SET password_hash=%s WHERE username=%s", (passwords.encode_pw(new_password)[0], login))
 	conn.commit()
-
-
