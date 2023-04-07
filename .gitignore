@@ -1,3 +1,2 @@
-__pycache__/
-secret_key
-flask_session/
+/target
+/.vscode

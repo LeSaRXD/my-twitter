@@ -23,7 +23,7 @@ form{
 	background: #111;
 	border-radius: 20px;
 }
-#welcome_back{
+#title{
 	margin: 20px;
 	text-align: center;
 }
@@ -72,17 +72,12 @@ form{
 
 <div id="background">
 	<div>
-		<h1 id="welcome_back">Welcome back!</h1>
+		<h1 id="title"></h1>
 	</div>
 	<div id="background">
-
-		{% for message in get_flashed_messages() %}
-		<div class="alert">{{ message }}</div>
-		{% endfor %}
-		
 		<form method="post">
 			<h3>Enter your post: </h3>
-			<textarea id="post_input" rows="16" cols="64" name="body" placeholder="Write your post here" required>{{ request.form['body'] }}</textarea>
+			<textarea id="post_input" rows="16" cols="64" name="body" placeholder="Write your post here" required></textarea>
 			<div id="submit_container">
 				<button type="submit">Create a post</button>
 			</div>

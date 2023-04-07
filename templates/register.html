@@ -23,7 +23,7 @@ form{
 	background: #111;
 	border-radius: 20px;
 }
-#welcome_back{
+#title{
 	margin: 20px;
 	text-align: center;
 }
@@ -64,19 +64,19 @@ form{
 
 <div id="background">
 	<div>
-		<h1 id="welcome_back">Welcome!</h1>
+		<h1 id="title">Welcome!</h1>
 	</div>
 	<div id="background">
 
-		{% for message in get_flashed_messages() %}
-		<div class="alert">{{ message }}</div>
-		{% endfor %}
+		{% if flash %}
+		<div class="alert">{{ flash }}</div>
+		{% endif %}
 		
 		<form method="post">
 			<h3>Create a login: </h3>
-			<input type="text" name="login" placeholder="Enter your login here" value="{{ request.form['login'] }}" required />
+			<input type="text" name="username" placeholder="Enter your login here" required />
 			<h3>Create a password: </h3>
-			<input type="password" name="password" placeholder="Enter your password here" value="{{ request.form['password'] }}" required />
+			<input type="password" name="password" placeholder="Enter your password here" required />
 			<div id="submit_container">
 				<button type="submit">Register</button>
 			</div>

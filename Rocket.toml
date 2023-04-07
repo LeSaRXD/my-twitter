@@ -1,0 +1,5 @@
+[debug]
+port=7777
+
+[production]
+port=7777

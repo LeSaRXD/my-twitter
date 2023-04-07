@@ -1,0 +1,24 @@
+[package]
+name = "my-twitter"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# tokio = { version = "1", features = ["full"] }
+rocket = { git = "https://github.com/SergioBenitez/Rocket/", rev = "91f6288", features = [ "uuid", "secrets" ] }
+sqlx = { version = "0.6.3", features = [ "runtime-tokio-rustls", "postgres", "uuid", "chrono" ] }
+tera = { version = "1.18.1", default-features = false }
+
+serde = "1.0.159"
+serde_json = "1.0.95"
+futures = "0.3.28"
+
+lazy_static = "1.4.0"
+async_once = "0.2.6"
+
+hmac-sha512 = "1.1.4"
+rand = "0.8.5"
+hex = "0.4.3"
+dotenv = "0.15.0"
