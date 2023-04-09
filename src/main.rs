@@ -89,7 +89,7 @@ fn rocket() -> _ {
 
 	rocket::build()
 		.mount("/", routes![
-			feed, get_post, get_create_post, create_post, delete_post,
+			get_feed, get_post, get_create_post, create_post, delete_post, get_user,
 			get_login, login, get_register, register, signout
 		])
 		.mount("/static", FileServer::from("../static"))
@@ -100,7 +100,7 @@ fn rocket() -> _ {
 
 // posts
 #[get("/")]
-async fn feed(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Status> {
+async fn get_feed(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Status> {
 
 	let userdata: Userdata = jar.into();
 
@@ -113,7 +113,7 @@ async fn feed(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Status> {
 	// inserting posts
 	// get responses
 	let responses = future::join_all(
-		match database::get_posts(0)
+		match database::get_posts(0, None)
 		.await {
 			Ok(p) => p,
 			Err(_) => { return Err(Status::InternalServerError); },
@@ -211,6 +211,48 @@ async fn delete_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<Redirect, sta
 		None => Err(status::BadRequest(Some("Not logged in".to_string())))
 	}
 
+}
+
+#[get("/user/<username>")]
+async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<content::RawHtml<String>, Status> {
+
+	let userdata: Userdata = jar.into();
+
+	// creating template context
+	let mut context = Context::new();
+
+	// inserting user data
+	context.insert("userdata", &userdata);
+	
+	// inserting posts
+	// get responses
+	let responses = future::join_all(
+		match database::get_posts(0, Some(username))
+		.await {
+			Ok(p) => p,
+			Err(_) => { return Err(Status::InternalServerError); },
+		}
+		.iter()
+		.map(|post| async { TemplatePost::from(post).await } )
+	).await;
+	// look throigh each response in case there's an error
+	let mut posts: Vec<TemplatePost> = Vec::new();
+	for res in responses {
+		match res {
+			Ok(p) => posts.push(p),
+			Err(_) => return Err(Status::InternalServerError),
+		}
+	}
+	context.insert("posts", &posts);
+
+	// rendering the template
+	match TERA.render("feed.html", &context) {
+		Ok(s) => Ok(content::RawHtml(s)),
+		Err(e) => {
+			println!("{}", e);
+			Err(Status::InternalServerError)
+		}
+	}
 }
 
 

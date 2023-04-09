@@ -1,5 +1,5 @@
 use futures::TryFutureExt;
-use sqlx::{Postgres, Pool};
+use sqlx::{Postgres, Pool, FromRow};
 use sqlx::postgres::{PgPoolOptions};
 use sqlx::types::{Uuid, chrono::NaiveDateTime};
 use async_once::AsyncOnce;
@@ -20,6 +20,7 @@ lazy_static! {
 
 }
 
+#[derive(FromRow)]
 pub struct Post {
 	pub id: Uuid,
 	pub poster_id: Uuid,
@@ -103,24 +104,22 @@ pub async fn register(username: &String, password: &String) -> Result<Account, s
 
 
 // posts
-pub async fn get_posts(post_amount: i64) -> Result<Vec<Post>, sqlx::Error> {
+pub async fn get_posts(post_amount: i64, username: Option<String>) -> Result<Vec<Post>, sqlx::Error> {
 
-	if post_amount > 0 {
-		sqlx::query_as!(
-			Post,
-			"SELECT id, poster_id, body, time, likes, deleted FROM post ORDER BY time DESC LIMIT $1;",
-			post_amount
-		)
-			.fetch_all(POOL.get().await)
-			.await
-	} else {
-		sqlx::query_as!(
-			Post,
-			"SELECT id, poster_id, body, time, likes, deleted FROM post ORDER BY time DESC;"
-		)
-			.fetch_all(POOL.get().await)
-			.await
-	}
+	let query = format!(
+		"SELECT id, poster_id, body, time, likes, deleted FROM post {} {} ORDER BY time DESC;",
+		match username {
+			Some(u) => {
+				format!("WHERE poster_id='{}'", get_uuid_by_username(&u).await?)
+			},
+			None => "".to_string(),
+		},
+		if post_amount > 0 { format!(" LIMIT {}", post_amount) } else { "".to_string() }
+	);
+
+	sqlx::query_as::<Postgres, Post>(query.as_str())
+		.fetch_all(POOL.get().await)
+		.await	
 
 }
 
