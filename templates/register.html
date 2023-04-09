@@ -9,36 +9,23 @@ form{
 	padding-left: 20px;
 }
 #content{
-	justify-content: center;
-	align-items: center;	
-}
-#background{
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	justify-content: start;
-
-	width: 80%;
-	height: 80%;
-	background: #111;
-	border-radius: 20px;
+	justify-content: stretch;
 }
 #title{
 	margin: 20px;
 	text-align: center;
 }
 #background{
-	flex-grow: 1;
-
 	display: flex;
 	flex-direction: column;
 	justify-content: start;
 	align-items: start;
 
-	margin: 20px;
-	margin-top: 0;
 	padding: 20px;
-	background: #222;
+	background: #111;
 	border-radius: 20px;
 }
 #submit_container{
@@ -62,7 +49,7 @@ form{
 
 {% block content %}
 
-<div id="background">
+<div id="content">
 	<div>
 		<h1 id="title">Welcome!</h1>
 	</div>

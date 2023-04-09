@@ -9,36 +9,23 @@ form{
 	padding-left: 20px;
 }
 #content{
-	justify-content: center;
-	align-items: center;	
-}
-#background{
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	justify-content: start;
-
-	width: 80%;
-	height: 80%;
-	background: #111;
-	border-radius: 20px;
+	justify-content: stretch;
 }
 #title{
 	margin: 20px;
 	text-align: center;
 }
 #background{
-	flex-grow: 1;
-
 	display: flex;
 	flex-direction: column;
 	justify-content: start;
 	align-items: start;
 
-	margin: 20px;
-	margin-top: 0;
 	padding: 20px;
-	background: #222;
+	background: #111;
 	border-radius: 20px;
 }
 #submit_container{
@@ -62,7 +49,7 @@ form{
 
 {% block content %}
 
-<div id="background">
+<div id="content">
 	<div>
 		<h1 id="title">Welcome back!</h1>
 	</div>
@@ -73,9 +60,9 @@ form{
 		{% endif %}
 		
 		<form method="post">
-			<h3>Login: </h3>
+			<h3>Enter your login: </h3>
 			<input type="text" name="username" placeholder="Enter your login here" required />
-			<h3>Password: </h3>
+			<h3>Enter your password: </h3>
 			<input type="password" name="password" placeholder="Enter your password here" required />
 			<div id="submit_container">
 				<button type="submit">Login</button>

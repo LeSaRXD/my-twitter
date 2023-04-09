@@ -1,8 +1,9 @@
 html, body{
-	height: fit-content;
 	margin: 0;
+
 	background: #000;
 	color: #fff;
+
 	font-family: arial;
 	font-size: 18px;
 }
@@ -20,13 +21,14 @@ button{
 
 	background: #000;
 	color: #fff;
-	font-size: 20px;
+
+	font-size: inherit;
 	
 	border: 1px solid #fff;
 	border-radius: 5px;
 }
 button:hover{
-	background: #555;
+	background: #333;
 }
 a{
 	color: inherit;
@@ -46,54 +48,38 @@ input{
 input:focus{
 	background: #111;
 }
+.underline{
+	text-decoration: underline;
+}
 
 header{
 	position: sticky;
 	top: 0px;
-	height: 40px;
+	height: 2rem;
 	z-index: 999;
+
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+
+	padding: 0.5rem;
 
 	background: #111;
 
-	padding: 8px;
-	margin-bottom: 4px;
+	font-size: 1.2rem;
+}
+.header_item{
+	height: inherit;
 
 	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 }
 #header_logo{
-	width: 200px;
-	display: flex;
-	justify-content: left;
-	align-items: center;
-}
-#header_title{
-	display: inline;
-}
-.header_right_container{
-	margin-left: auto;
-	height: 100%;
-	display: flex;
-	flex-direction: row;
-	justify-content: right;
-	align-items: center;
-}
-.header_image{
-	height: 25px;
-}
-.header_button{
-	margin: 5px;
-}
-#account_handle{
-	margin: 5px;
+	height: inherit;
 }
 
-#content{
-	width: 100%;
-	height: fit-content;
-	display: flex;
-	flex-direction: column;
-}
-
-.profile_image{
-	border-radius: 5px;
+.handle{
+	color: rgb(50, 171, 219);
+	font-weight: bold;
 }
