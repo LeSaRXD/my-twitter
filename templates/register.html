@@ -1,13 +1,10 @@
 {% extends 'base.html' %}
 
-{% block title %}Register{% endblock %}
+{% block title %}Login{% endblock %}
 
 {% block styles %}
 <style>
 
-form{
-	padding-left: 20px;
-}
 #content{
 	display: flex;
 	flex-direction: column;
@@ -15,7 +12,8 @@ form{
 	justify-content: stretch;
 }
 #title{
-	margin: 20px;
+	align-self: start;
+	margin: 1.5rem;
 	text-align: center;
 }
 #background{
@@ -24,22 +22,32 @@ form{
 	justify-content: start;
 	align-items: start;
 
-	padding: 20px;
+	margin: 1rem;
+	padding: 1rem;
+
 	background: #111;
 	border-radius: 20px;
 }
-#submit_container{
-	margin: 20px 0px;
-}
+
 .alert{
-	padding: 10px 20px;
-	margin: 5px 20px;
+	padding: 0.5rem;
 	border-radius: 10px;
 
-	background: #964b4b;
+	background: #ce6464;
 	color: #fff;
 
-	font-size: 20px;
+	font-size: 1.5rem;
+}
+
+#form_container{
+	display: flex;
+	flex-direction: column;
+	align-items: start;
+	justify-content: start;
+	gap: 0.5rem;
+}
+#form_button{
+	margin: 0;
 }
 
 </style>
@@ -50,23 +58,21 @@ form{
 {% block content %}
 
 <div id="content">
-	<div>
-		<h1 id="title">Welcome!</h1>
-	</div>
-	<div id="background">
+	<h1 id="title">Welcome!</h1>
 
+	<hr>
+
+	<div id="background">
 		{% if flash %}
 		<div class="alert">{{ flash }}</div>
 		{% endif %}
 		
-		<form method="post">
-			<h3>Create a login: </h3>
+		<form id="form_container" method="post">
+			<h2>Create a login</h2>
 			<input type="text" name="username" placeholder="Enter your login here" required />
-			<h3>Create a password: </h3>
-			<input type="password" name="password" placeholder="Enter your password here" required />
-			<div id="submit_container">
-				<button type="submit">Register</button>
-			</div>
+			<h2>Create a password</h2>
+			<input type="password" name="password" placeholder="Enter your password here" required />		
+			<button id="form_button" type="submit">Register</button>
 		</form>
 	</div>
 </div>

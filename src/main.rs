@@ -89,7 +89,7 @@ fn rocket() -> _ {
 
 	rocket::build()
 		.mount("/", routes![
-			get_feed, get_post, get_create_post, create_post, delete_post, get_user,
+			get_feed, get_post, create_post, delete_post, get_user,
 			get_login, login, get_register, register, signout
 		])
 		.mount("/static", FileServer::from("../static"))
@@ -153,25 +153,6 @@ async fn get_post(post_id: Uuid) -> Result<String, status::NotFound<String>> {
 	};
 	// TODO: replace with template
 	Ok(format!("Post id: {}\n{}", post_id.to_string(), post.body))
-
-}
-
-#[get("/create_post")]
-async fn get_create_post(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Either<Redirect, Status>> {
-
-	let userdata: Userdata = jar.into();
-
-	if userdata.username == None {
-		return Err(Left(Redirect::to("/login")));
-	}
-
-	let mut context = Context::new();
-	context.insert("userdata", &userdata);
-
-	match TERA.render("create_post.html", &context) {
-		Ok(s) => Ok(content::RawHtml(s)),
-		Err(_) => Err(Right(Status::InternalServerError))
-	}
 
 }
 
