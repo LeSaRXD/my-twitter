@@ -7,13 +7,13 @@ fn current_timestamp() -> NaiveDateTime {
 
 pub fn format_timestamp(dt: NaiveDateTime) -> String {
 	
-	let formatted = dt.time().format("%H:%M:%S").to_string();
+	let formatted_time = dt.time().format("%H:%M:%S").to_string();
 
 	let now = current_timestamp();	
 	if dt.date() == now.date() {
-		format!("{} today", formatted)
+		format!("{} today", formatted_time)
 	} else {
-		format!("{} {}", dt.date().format("%d/%m/%y"), formatted)
+		format!("{} {}", formatted_time, dt.date().format("%d/%m/%y"))
 	}
 
 }
