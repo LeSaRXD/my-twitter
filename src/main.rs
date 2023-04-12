@@ -6,12 +6,11 @@ mod timestamps;
 mod passwords;
 
 use rocket::{
-	response::{content, status, Redirect},
+	response::{content::RawHtml, status, Redirect},
 	fs::FileServer,
 	http::{CookieJar, Status, Cookie},
 	serde::uuid::Uuid,
 	form::{Form, FromForm},
-	Either::{self, Left, Right}
 };
 use tera::{Tera, Context};
 use serde::Serialize;
@@ -37,10 +36,7 @@ struct Userdata {
 impl From<&CookieJar<'_>> for Userdata {
 	fn from(jar: &CookieJar) -> Self {
 		Userdata { 
-			username: match jar.get_private("username") {
-				Some(c) => Some(c.value().to_string()),
-				None => None,
-			}
+			username: jar.get_private("username").map(|c| c.value().to_string())
 		}
 	}
 }
@@ -100,7 +96,7 @@ fn rocket() -> _ {
 
 // posts
 #[get("/")]
-async fn get_feed(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Status> {
+async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 
 	let userdata: Userdata = jar.into();
 
@@ -133,7 +129,7 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Statu
 
 	// rendering the template
 	match TERA.render("feed.html", &context) {
-		Ok(s) => Ok(content::RawHtml(s)),
+		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => {
 			println!("{}", e);
 			Err(Status::InternalServerError)
@@ -143,21 +139,32 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Statu
 }
 
 #[get("/post/<post_id>")]
-async fn get_post(post_id: Uuid) -> Result<String, status::NotFound<String>> {
+async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>, Status> {
+
+	let userdata: Userdata = jar.into();
 
 	let post = match database::get_post(&post_id).await {
 		Ok(p) => p,
-		Err(_) => return Err(status::NotFound(
-			format!("Post with id {} not found", post_id.to_string())
-		)),
+		Err(_) => return Err(Status::NotFound),
 	};
-	// TODO: replace with template
-	Ok(format!("Post id: {}\n{}", post_id.to_string(), post.body))
+	let template_post = match TemplatePost::from(&post).await {
+		Ok(p) => p,
+		Err(_) => return Err(Status::InternalServerError),
+	};
+
+	let mut context = Context::new();
+	context.insert("userdata", &userdata);
+	context.insert("post", &template_post);
+
+	match TERA.render("post.html", &context) {
+		Ok(s) => Ok(RawHtml(s)),
+		Err(_) => Err(Status::InternalServerError),
+	}
 
 }
 
 #[post("/create_post", data = "<post_input>")]
-async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result<Redirect, Either<Redirect, Status>> {
+async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result<Redirect, Status> {
 
 	let userdata: Userdata = jar.into();
 	
@@ -166,36 +173,36 @@ async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result
 			match database::create_post(&username,
 				match &post_input.body {
 					Some(b) => b,
-					None => return Err(Left(Redirect::to("/"))),
+					None => return Err(Status::BadRequest),
 				}
 			).await {
 				Ok(_) => Ok(Redirect::to("/")),
-				Err(_) => Err(Right(Status::InternalServerError)),
+				Err(_) => Err(Status::InternalServerError),
 			}
 		},
-		None => Err(Left(Redirect::to("/login"))),
+		None => Err(Status::Unauthorized),
 	}
 
 }
 
 #[get("/delete_post/<post_id>")]
-async fn delete_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<Redirect, status::BadRequest<String>> {
+async fn delete_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<Redirect, Status> {
 
 	let userdata: Userdata = jar.into();
 	match userdata.username {
 		Some(username) => {
 			match database::delete_post(&post_id, &username).await {
 				Ok(_) => Ok(Redirect::to("/")),
-				Err(_) => Err(status::BadRequest(Some("Couldn't delete post".to_string())))
+				Err(_) => Err(Status::BadRequest)
 			}
 		},
-		None => Err(status::BadRequest(Some("Not logged in".to_string())))
+		None => Err(Status::Unauthorized)
 	}
 
 }
 
 #[get("/user/<username>")]
-async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<content::RawHtml<String>, Status> {
+async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<String>, Status> {
 
 	let userdata: Userdata = jar.into();
 
@@ -228,11 +235,8 @@ async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<content::RawH
 
 	// rendering the template
 	match TERA.render("feed.html", &context) {
-		Ok(s) => Ok(content::RawHtml(s)),
-		Err(e) => {
-			println!("{}", e);
-			Err(Status::InternalServerError)
-		}
+		Ok(s) => Ok(RawHtml(s)),
+		Err(_) => Err(Status::InternalServerError)
 	}
 }
 
@@ -240,12 +244,12 @@ async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<content::RawH
 
 // accounts
 #[get("/login")]
-fn get_login(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Either<Redirect, Status>> {
+fn get_login(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 
 	let userdata: Userdata = jar.into();
 
 	match userdata.username {
-		Some(_) => Err(Left(Redirect::to("/"))),
+		Some(_) => Err(Status::BadRequest),
 		None => {
 			// creating template context
 			let mut context = Context::new();
@@ -254,8 +258,8 @@ fn get_login(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Either<Red
 			context.insert("userdata", &userdata);
 
 			match TERA.render("login.html", &context) {
-				Ok(s) => Ok(content::RawHtml(s)),
-				Err(_) => Err(Right(Status::InternalServerError))
+				Ok(s) => Ok(RawHtml(s)),
+				Err(_) => Err(Status::InternalServerError)
 			}
 			
 		}
@@ -264,32 +268,16 @@ fn get_login(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Either<Red
 }
 
 #[post("/login", data = "<login_input>")]
-async fn login(jar: &CookieJar<'_>, login_input: Form<AuthInput>) -> Result<Redirect, Either<content::RawHtml<String>, Status>> {
-
-	let userdata = Userdata::from(jar);
-
-	fn render_login(userdata: &Userdata, flash: &str) -> Either<content::RawHtml<String>, Status> {
-
-		let mut context = Context::new();
-
-		context.insert("userdata", &userdata);
-		context.insert("flash", &flash);
-
-		match TERA.render("login.html", &context) {
-			Ok(s) => return Left(content::RawHtml(s)),
-			Err(_) => return Right(Status::InternalServerError)
-		}
-
-	}
+async fn login(jar: &CookieJar<'_>, login_input: Form<AuthInput>) -> Result<Redirect, status::BadRequest<&'static str>> {
 
 	match database::login(
 		match &login_input.username {
 			Some(u) => u,
-			None => return Err(render_login(&userdata, "Please enter your login")),
+			None => return Err(status::BadRequest(Some("No login provided"))),
 		},
 		match &login_input.password {
 			Some(p) => p,
-			None => return Err(render_login(&userdata, "Please enter your password")),
+			None => return Err(status::BadRequest(Some("No password provided"))),
 		}
 	).await {
 		Ok(a) => {
@@ -298,21 +286,21 @@ async fn login(jar: &CookieJar<'_>, login_input: Form<AuthInput>) -> Result<Redi
 					jar.add_private(Cookie::new("username", acc.username));
 					Ok(Redirect::to("/"))
 				},
-				None => return Err(render_login(&userdata, "Incorrect password")),
+				None => Ok(Redirect::to("/login?err=pw")),
 			}
 		},
-		Err(_) => Err(render_login(&userdata, "Incorrect login"))
+		Err(_) => Ok(Redirect::to("/login?err=login"))
 	}
 
 }
 
 #[get("/register")]
-async fn get_register(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, Either<Redirect, Status>> {
+fn get_register(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 
 	let userdata: Userdata = jar.into();
 
 	match userdata.username {
-		Some(_) => Err(Left(Redirect::to("/"))),
+		Some(_) => Err(Status::BadRequest),
 		None => {
 			// creating template context
 			let mut context = Context::new();
@@ -321,8 +309,8 @@ async fn get_register(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, E
 			context.insert("userdata", &userdata);
 
 			match TERA.render("register.html", &context) {
-				Ok(s) => Ok(content::RawHtml(s)),
-				Err(_) => Err(Right(Status::InternalServerError))
+				Ok(s) => Ok(RawHtml(s)),
+				Err(_) => Err(Status::InternalServerError)
 			}
 			
 		}
@@ -331,39 +319,23 @@ async fn get_register(jar: &CookieJar<'_>) -> Result<content::RawHtml<String>, E
 }
 
 #[post("/register", data = "<register_input>")]
-async fn register(jar: &CookieJar<'_>, register_input: Form<AuthInput>) -> Result<Redirect, Either<content::RawHtml<String>, Status>> {
-
-	let userdata = Userdata::from(jar);
-
-	fn render_register(userdata: &Userdata, flash: &str) -> Either<content::RawHtml<String>, Status> {
-
-		let mut context = Context::new();
-
-		context.insert("userdata", &userdata);
-		context.insert("flash", &flash);
-
-		match TERA.render("register.html", &context) {
-			Ok(s) => return Left(content::RawHtml(s)),
-			Err(_) => return Right(Status::InternalServerError)
-		}
-
-	}
+async fn register(jar: &CookieJar<'_>, register_input: Form<AuthInput>) -> Result<Redirect, status::BadRequest<&'static str>> {
 
 	match database::register(
 		match &register_input.username {
 			Some(u) => u,
-			None => return Err(render_register(&userdata, "Please enter your login")),
+			None => return Err(status::BadRequest(Some("No login provided"))),
 		},
 		match &register_input.password {
 			Some(p) => p,
-			None => return Err(render_register(&userdata, "Please enter your password")),
+			None => return Err(status::BadRequest(Some("No password provided"))),
 		}
 	).await {
-		Ok(acc) =>  {
+		Ok(acc) => {
 			jar.add_private(Cookie::new("username", acc.username));
 			Ok(Redirect::to("/"))
 		},
-		Err(_) => Err(render_register(&userdata, "User with that login already exists"))
+		Err(_) => Ok(Redirect::to("/login?err=login")),
 	}
 
 }

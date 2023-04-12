@@ -53,12 +53,16 @@ input:focus{
 	background: #111;
 }
 textarea{
+	resize: none;
+	padding: 0.5rem;
+
 	background: inherit;
 	color: inherit;
+
 	font-size: 1.2rem;
+
 	border: 1px solid #fff;
 	border-radius: 5px;
-	padding: 0.5rem;
 }
 hr{
 	width: calc(100% - 2rem);
