@@ -44,12 +44,9 @@ pub struct Account {
 // accounts
 async fn get_uuid_by_username(username: &String) -> Result<Uuid, sqlx::Error> {
 
-	match sqlx::query!("SELECT id FROM account WHERE username=$1", username)
+	sqlx::query!("SELECT id FROM account WHERE username=$1", username)
 		.fetch_one(POOL.get().await)
-		.await {
-			Ok(r) => Ok(r.id),
-			Err(e) => Err(e)
-		}
+		.await.map(|r| r.id)
 
 }
 
@@ -68,7 +65,7 @@ pub async fn login(username: &String, password: &String) -> Result<Option<Accoun
 
 	match sqlx::query_as!(
 		Account,
-		"SELECT id, username, password_hash, create_time FROM account WHERE username=$1;",
+		"SELECT * FROM account WHERE username=$1;",
 		username
 	)
 		.fetch_one(POOL.get().await)
@@ -104,10 +101,10 @@ pub async fn register(username: &String, password: &String) -> Result<Account, s
 
 
 // posts
-pub async fn get_posts(post_amount: i64, username: Option<String>) -> Result<Vec<Post>, sqlx::Error> {
+pub async fn get_posts(post_amount: u32, username: Option<String>) -> Result<Vec<Post>, sqlx::Error> {
 
 	let query = format!(
-		"SELECT id, poster_id, body, time, likes, deleted FROM post {} {} ORDER BY time DESC;",
+		"SELECT * FROM post {} {} ORDER BY time DESC;",
 		match username {
 			Some(u) => {
 				format!("WHERE poster_id='{}'", get_uuid_by_username(&u).await?)
@@ -127,7 +124,7 @@ pub async fn get_post(post_id: &Uuid) -> Result<Post, sqlx::Error> {
 
 	sqlx::query_as!(
 		Post,
-		"SELECT id, poster_id, body, time, likes, deleted FROM post WHERE id=$1;",
+		"SELECT * FROM post WHERE id=$1;",
 		post_id
 	)
 		.fetch_one(POOL.get().await)
