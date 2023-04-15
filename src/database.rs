@@ -10,6 +10,7 @@ use crate::passwords;
 const MAX_ITERATIONS: u8 = 100;
 
 lazy_static! {
+
 	static ref CONNECTION_URL: String = dotenv::var("DATABASE_URL").unwrap();
 	
 	pub static ref POOL: AsyncOnce<Pool<Postgres>> = AsyncOnce::new(
@@ -28,6 +29,8 @@ pub struct Post {
 	pub time: NaiveDateTime,
 	pub likes: i32,
 	pub deleted: bool,
+	pub reply: bool,
+	parent_id: Option<Uuid>,
 }
 
 pub struct Account {
@@ -36,8 +39,6 @@ pub struct Account {
 	pub password_hash: String,
 	pub create_time: NaiveDateTime,
 }
-
-
 
 
 
@@ -101,24 +102,46 @@ pub async fn register(username: &String, password: &String) -> Result<Account, s
 
 
 // posts
-pub async fn get_posts(post_amount: u32, username: Option<String>) -> Result<Vec<Post>, sqlx::Error> {
+pub async fn get_posts(post_amount: i64) -> Result<Vec<Post>, sqlx::Error> {
 
-	let query = format!(
-		"SELECT * FROM post {} {} ORDER BY time DESC;",
-		match username {
-			Some(u) => {
-				format!("WHERE poster_id='{}'", get_uuid_by_username(&u).await?)
-			},
-			None => "".to_string(),
-		},
-		if post_amount > 0 { format!(" LIMIT {}", post_amount) } else { "".to_string() }
-	);
-
-	sqlx::query_as::<Postgres, Post>(query.as_str())
-		.fetch_all(POOL.get().await)
-		.await	
+	sqlx::query_as!(
+		Post, 
+		"SELECT * FROM post ORDER BY time DESC LIMIT $1",
+		post_amount
+	)
+	.fetch_all(POOL.get().await)
+	.await	
 
 }
+
+pub async fn get_posts_by_user(post_amount: i64, username: &String) -> Result<Vec<Post>, sqlx::Error> {
+
+	sqlx::query_as!(
+		Post, 
+		"SELECT * FROM post WHERE poster_id=$1 ORDER BY time DESC LIMIT $2",
+		get_uuid_by_username(username).await?,
+		post_amount
+	)
+	.fetch_all(POOL.get().await)
+	.await	
+
+}
+
+pub async fn get_replies(reply_amount: i64, parent_id: Uuid) -> Result<Vec<Post>, sqlx::Error> {
+
+	sqlx::query_as!(
+		Post, 
+		"SELECT * FROM post WHERE parent_id=$1 ORDER BY time DESC LIMIT $2",
+		parent_id,
+		reply_amount
+	)
+	.fetch_all(POOL.get().await)
+	.await	
+
+}
+
+
+
 
 pub async fn get_post(post_id: &Uuid) -> Result<Post, sqlx::Error> {
 
@@ -127,36 +150,49 @@ pub async fn get_post(post_id: &Uuid) -> Result<Post, sqlx::Error> {
 		"SELECT * FROM post WHERE id=$1;",
 		post_id
 	)
-		.fetch_one(POOL.get().await)
-		.await
+	.fetch_one(POOL.get().await)
+	.await
 
 }
 
-pub async fn create_post(username: &String, body: &String) -> Result<Uuid, sqlx::Error> {
+pub async fn create_post(username: &String, body: &String, parent_id: Option<Uuid>) -> Result<Uuid, sqlx::Error> {
 
 	let uuid = get_uuid_by_username(username).await?;
 
-	match sqlx::query!(
-		"INSERT INTO post (poster_id, body) VALUES($1, $2) RETURNING id;",
-		uuid,
-		body
-	)
-		.fetch_one(POOL.get().await)
-		.await {
-			Ok(r) => Ok(r.id),
-			Err(e) => Err(e),
-		}
+	match parent_id {
+		Some(parent_id) => Ok(
+			sqlx::query!(
+				"INSERT INTO post (poster_id, body, reply, parent_id) VALUES($1, $2, TRUE, $3) RETURNING id;",
+				uuid,
+				body,
+				parent_id
+			)
+			.fetch_one(POOL.get().await)
+			.await?
+			.id
+		),
+		None => Ok(
+			sqlx::query!(
+				"INSERT INTO post (poster_id, body) VALUES($1, $2) RETURNING id;",
+				uuid,
+				body
+			)
+			.fetch_one(POOL.get().await)
+			.await?
+			.id
+		),
+	}
 
 }
 
-pub async fn delete_post(post_id: &Uuid, username: &String) -> Result<Uuid, sqlx::Error> {
+pub async fn delete_post(post_id: &Uuid, username: &String) -> Result<Option<Uuid>, sqlx::Error> {
 
 	let uuid = get_uuid_by_username(username).await?;
 	
-	match sqlx::query!("UPDATE POST SET deleted=TRUE WHERE id=$1 AND poster_id=$2 RETURNING id;", post_id, uuid)
+	match sqlx::query!("UPDATE POST SET deleted=TRUE WHERE id=$1 AND poster_id=$2 RETURNING parent_id;", post_id, uuid)
 		.fetch_one(POOL.get().await)
 		.await {
-			Ok(r) => Ok(r.id),
+			Ok(r) => Ok(r.parent_id),
 			Err(e) => Err(e),
 		}
 
