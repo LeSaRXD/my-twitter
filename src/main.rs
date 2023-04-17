@@ -18,9 +18,10 @@ use futures::future;
 
 
 
+// global constants
 lazy_static! {
 
-	static ref TERA: Tera = match Tera::new("../templates/**/*.html") {
+	static ref TERA: Tera = match Tera::new("./templates/**/*.html") {
 		Ok(t) => t,
 		Err(e) => panic!("Error!\n{}", e),
 	};
@@ -35,7 +36,7 @@ struct Userdata {
 }
 impl From<&CookieJar<'_>> for Userdata {
 	fn from(jar: &CookieJar) -> Self {
-		Userdata { 
+		Self { 
 			username: jar.get_private("username").map(|c| c.value().to_string())
 		}
 	}
@@ -56,30 +57,38 @@ struct PostInput {
 
 
 #[derive(Serialize)]
-pub struct TemplatePost {
+pub struct BaseTemplatePost {
 	pub id: String,
 	pub username: String,
 	pub body: String,
 	pub time: String,
 	pub likes: i32,
 	pub deleted: bool,
-	pub reply: bool,
+	pub is_reply: bool,
 }
-impl TemplatePost {
+
+impl BaseTemplatePost {
 
 	pub async fn from(post: &database::Post) -> Result<Self, sqlx::Error> {
-		Ok(TemplatePost {
+		Ok(Self {
 			id: post.id.to_string(),
 			username: database::get_username_by_uuid(&post.poster_id).await?,
 			body: post.body.to_owned(),
 			time: timestamps::format_timestamp(post.time),
 			likes: post.likes,
 			deleted: post.deleted,
-			reply: post.reply,
+			is_reply: post.is_reply
 		})
 	}
 
 }
+
+#[derive(Serialize)]
+pub struct ReplyTemplatePost {
+	base: BaseTemplatePost,
+	reply: Option<BaseTemplatePost>,
+}
+
 
 
 
@@ -91,13 +100,38 @@ fn rocket() -> _ {
 			get_feed, get_post, create_post, delete_post, get_user,
 			get_login, login, get_register, register, signout
 		])
-		.mount("/static", FileServer::from("../static"))
+		.mount("/static", FileServer::from("./static"))
 
 }
 
 
 
 // posts
+
+async fn db_posts_to_template_posts(db_posts: Vec<database::Post>) -> Result<Vec<ReplyTemplatePost>, sqlx::Error> {
+	
+	future::join_all(
+		db_posts
+		.iter()
+		.map(|post| async {
+			Ok(ReplyTemplatePost {
+				base: BaseTemplatePost::from(post).await?,
+				reply: match database::get_replies(1, post.id).await?.get(0) {
+					Some(p) => Some(BaseTemplatePost::from(p).await?),
+					None => None,
+				},
+			})
+		})
+	)
+	.await
+	// catch any errors
+	.into_iter()
+	.collect::<Result<Vec<ReplyTemplatePost>, sqlx::Error>>()
+
+}
+
+
+
 #[get("/")]
 async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 
@@ -110,21 +144,12 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 	context.insert("userdata", &userdata);
 	
 	// inserting posts
-	let posts = match future::join_all(
-		// get posts from database
-		match database::get_posts(100).await {
-			Ok(p) => p,
-			Err(_) => return Err(Status::InternalServerError),
-		}
-		// convert them into template posts
-		.iter()
-		.map(|post| async { TemplatePost::from(post).await })
-	)
-	.await
-	// catch any errors
-	.into_iter()
-	.collect::<Result<Vec<TemplatePost>, sqlx::Error>>() {
-		Ok(posts) => posts,
+	let db_posts = match database::get_posts(100).await {
+		Ok(p) => p,
+		Err(_) => return Err(Status::InternalServerError),
+	};
+	let posts = match db_posts_to_template_posts(db_posts).await {
+		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
 	};
 	
@@ -133,10 +158,7 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 	// rendering the template
 	match TERA.render("feed.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
-		Err(e) => {
-			println!("{}", e);
-			Err(Status::InternalServerError)
-		}
+		Err(_) => Err(Status::InternalServerError),
 	}
 
 }
@@ -154,31 +176,22 @@ async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>,
 
 	// inserting post
 	let post = match database::get_post(&post_id).await {
-		Ok(post) => match TemplatePost::from(&post).await {
-			Ok(tp) => tp,
+		Ok(post) => match BaseTemplatePost::from(&post).await {
+			Ok(p) => p,
 			Err(_) => return Err(Status::InternalServerError),
 		},
 		Err(_) => return Err(Status::NotFound),
 	};
 
-	context.insert("post", &post);
+	context.insert("base_post", &post);
 
 	// inserting replies
-	let replies = match future::join_all(
-		// get posts from database
-		match database::get_replies(100, post_id).await {
-			Ok(p) => p,
-			Err(_) => return Err(Status::InternalServerError),
-		}
-		// convert them into template posts
-		.iter()
-		.map(|post| async { TemplatePost::from(post).await })
-	)
-	.await
-	// catch any errors
-	.into_iter()
-	.collect::<Result<Vec<TemplatePost>, sqlx::Error>>() {
-		Ok(posts) => posts,
+	let db_replies = match database::get_replies(100, post_id).await {
+		Ok(p) => p,
+		Err(_) => return Err(Status::InternalServerError),
+	};
+	let replies = match db_posts_to_template_posts(db_replies).await {
+		Ok(r) => r,
 		Err(_) => return Err(Status::InternalServerError),
 	};
 
@@ -249,40 +262,36 @@ async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<Strin
 	// creating template context
 	let mut context = Context::new();
 
+	// inserting username
+	context.insert("username", &username);
+
 	// inserting user data
 	context.insert("userdata", &userdata);
 	
 	// inserting posts
-	// get responses
-	let responses = future::join_all(
-		match database::get_posts_by_user(100, &username)
-		.await {
-			Ok(p) => p,
-			Err(_) => { return Err(Status::InternalServerError); },
-		}
-		.iter()
-		.map(|post| async { TemplatePost::from(post).await } )
-	).await;
-	// look throigh each response in case there's an error
-	let mut posts: Vec<TemplatePost> = Vec::new();
-	for res in responses {
-		match res {
-			Ok(p) => posts.push(p),
-			Err(_) => return Err(Status::InternalServerError),
-		}
-	}
+	let db_posts = match database::get_posts_by_user(100, &username).await {
+		Ok(p) => p,
+		Err(_) => return Err(Status::InternalServerError),
+	};
+	let posts = match db_posts_to_template_posts(db_posts).await {
+		Ok(p) => p,
+		Err(_) => return Err(Status::InternalServerError),
+	};
+
 	context.insert("posts", &posts);
 
 	// rendering the template
-	match TERA.render("feed.html", &context) {
+	match TERA.render("user.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(_) => Err(Status::InternalServerError)
 	}
+	
 }
 
 
 
 // accounts
+
 #[get("/login")]
 fn get_login(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 
@@ -375,7 +384,7 @@ async fn register(jar: &CookieJar<'_>, register_input: Form<AuthInput>) -> Resul
 			jar.add_private(Cookie::new("username", acc.username));
 			Ok(Redirect::to("/"))
 		},
-		Err(_) => Ok(Redirect::to("/login?err=login")),
+		Err(_) => Ok(Redirect::to("/register?err=login")),
 	}
 
 }

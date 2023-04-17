@@ -18,36 +18,13 @@
 
 {% endif %}
 
-<hr>
-
-<div id="content">
-
+<div class="content">
+	
 	{% for post in posts %}
-	{% if not post.reply %}
+	{% if not post.base.is_reply %}
 
-	<div class="post">
-		<div class="post_header">
-			<a href="/user/{{ post.username }}/" class="handle">@{{ post.username }}</a>
-			<span class="post_info_container">{{ post.time }}</span>
-		</div>
-		<div class="post_body">
-			{% if post.deleted %}
-			Post has been deleted
-			{% else %}
-			<pre>{{ post.body }}</pre>
-			{% endif %}
-		</div>
-		<div class="post_footer">
-			<pre><b>{{ post.likes }}</b> likes</pre>
-			<span class="post_info_container">
-				{% if post.username == userdata.username and not post.deleted %}
-				<a href="/delete_post/{{ post.id }}">delete</a>
-				{% endif %}
-				<a class="semitransparent" href="/post/{{ post.id }}">{{ post.id }}</a>
-			</span>
-		</div>
-	</div>
 	<hr>
+	{% include 'post_with_reply.html' %}
 
 	{% endif %}
 	{% endfor %}

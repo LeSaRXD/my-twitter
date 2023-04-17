@@ -1,0 +1,21 @@
+<div class="post" onclick="window.location.href = '/post/{{ base_post.id }}'">
+	<div class="post_header">
+		<a href="/user/{{ base_post.username }}" class="handle">@{{ base_post.username }}</a>
+		<span class="post_info_container">{{ base_post.time }}</span>
+	</div>
+	<div class="post_body">
+		{% if base_post.deleted %}
+		post has been deleted
+		{% else %}
+		<pre>{{ base_post.body }}</pre>
+		{% endif %}
+	</div>
+	<div class="post_footer">
+		<pre><b>{{ base_post.likes }}</b> likes</pre>
+		<span class="post_info_container">
+			{% if base_post.username == userdata.username and not base_post.deleted %}
+			<a href="/delete_post/{{ base_post.id }}">delete</a>
+			{% endif %}
+		</span>
+	</div>
+</div>

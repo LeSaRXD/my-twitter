@@ -1,0 +1,15 @@
+{% set base_post = post.base %}
+{% include 'base_post.html' %}
+
+{% if post.reply %}
+<div class="reply_container">
+	<div class="vr">
+		<hr>
+	</div>
+
+	<div class="replies">
+	{% set base_post = post.reply %}
+	{% include 'base_post.html' %}
+	</div>
+</div>
+{% endif %}

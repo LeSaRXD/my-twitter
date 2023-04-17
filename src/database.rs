@@ -1,10 +1,13 @@
+use std::str::FromStr;
+
 use futures::TryFutureExt;
-use sqlx::{Postgres, Pool, FromRow};
-use sqlx::postgres::{PgPoolOptions};
+use sqlx::{Postgres, Pool, FromRow, ConnectOptions};
+use sqlx::postgres::{PgPoolOptions, PgConnectOptions};
 use sqlx::types::{Uuid, chrono::NaiveDateTime};
 use async_once::AsyncOnce;
 
 use crate::passwords;
+
 
 
 const MAX_ITERATIONS: u8 = 100;
@@ -15,8 +18,10 @@ lazy_static! {
 	
 	pub static ref POOL: AsyncOnce<Pool<Postgres>> = AsyncOnce::new(
 		PgPoolOptions::new()
-			.max_connections(5)
-			.connect(&CONNECTION_URL).unwrap_or_else(|_| panic!("Error"))
+			.connect_with(
+				PgConnectOptions::from_str(&CONNECTION_URL).unwrap()
+				.disable_statement_logging().clone()
+			).unwrap_or_else(|e| panic!("{}", e))
 	);
 
 }
@@ -29,7 +34,7 @@ pub struct Post {
 	pub time: NaiveDateTime,
 	pub likes: i32,
 	pub deleted: bool,
-	pub reply: bool,
+	pub is_reply: bool,
 	parent_id: Option<Uuid>,
 }
 
@@ -131,7 +136,7 @@ pub async fn get_replies(reply_amount: i64, parent_id: Uuid) -> Result<Vec<Post>
 
 	sqlx::query_as!(
 		Post, 
-		"SELECT * FROM post WHERE parent_id=$1 ORDER BY time DESC LIMIT $2",
+		"SELECT * FROM post WHERE parent_id=$1 ORDER BY likes DESC LIMIT $2",
 		parent_id,
 		reply_amount
 	)
@@ -139,7 +144,6 @@ pub async fn get_replies(reply_amount: i64, parent_id: Uuid) -> Result<Vec<Post>
 	.await	
 
 }
-
 
 
 
@@ -162,7 +166,7 @@ pub async fn create_post(username: &String, body: &String, parent_id: Option<Uui
 	match parent_id {
 		Some(parent_id) => Ok(
 			sqlx::query!(
-				"INSERT INTO post (poster_id, body, reply, parent_id) VALUES($1, $2, TRUE, $3) RETURNING id;",
+				"INSERT INTO post (poster_id, body, is_reply, parent_id) VALUES($1, $2, TRUE, $3) RETURNING id;",
 				uuid,
 				body,
 				parent_id

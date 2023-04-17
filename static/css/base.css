@@ -67,6 +67,14 @@ textarea{
 hr{
 	width: calc(100% - 2rem);
 }
+.vr{
+	display: flex;
+	align-items: center;
+}
+.vr > hr{
+	margin: 0;
+	height: calc(100% - 1rem);
+}
 
 .underline{
 	text-decoration: underline;

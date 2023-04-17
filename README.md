@@ -5,12 +5,16 @@ Initialize postgres database
 ```
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; 
 
+DROP TABLE IF EXISTS account;
+
 CREATE TABLE account (
 id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
 username VARCHAR UNIQUE NOT NULL,
 password_hash VARCHAR NOT NULL,
 create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+DROP TABLE IF EXISTS post;
 
 CREATE TABLE post (
 id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4(),
