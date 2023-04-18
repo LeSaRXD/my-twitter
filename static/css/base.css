@@ -27,6 +27,7 @@ pre{
 	margin: inherit;
 	font-size: inherit;
 	font-family: inherit;
+	white-space: pre-wrap;
 }
 button{
 	margin: auto;
