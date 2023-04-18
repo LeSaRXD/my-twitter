@@ -17,6 +17,9 @@
 		<div class="header_item">
 			{% if userdata.username %}
 
+			<form method="post" action="/delete_account">
+				<button type="submit">Delete account</button>
+			</form>
 			<a class="underline" href="/signout">Sign out</a>
 			<a class="handle" href="/user/{{ userdata.username }}">@{{ userdata.username }}</a>
 			

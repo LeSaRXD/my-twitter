@@ -54,12 +54,17 @@ struct PostInput {
 	parent_id: Option<Uuid>,
 }
 
+#[derive(FromForm)]
+struct DeleteAccountInput {
+	preserve_posts: bool
+}
+
 
 
 #[derive(Serialize)]
 pub struct BaseTemplatePost {
 	pub id: String,
-	pub username: String,
+	pub username: Option<String>,
 	pub body: String,
 	pub time: String,
 	pub likes: i32,
@@ -74,7 +79,10 @@ impl BaseTemplatePost {
 
 		Ok(Self {
 			id: post.id.to_string(),
-			username: database::get_username_by_uuid(&post.poster_id).await?,
+			username: match database::get_username_by_uuid(&post.poster_id).await {
+				Ok(u) => Some(u),
+				Err(_) => None,
+			},
 			body: post.body.to_owned(),
 			time: timestamps::format_timestamp(post.time),
 			likes: post.likes,
@@ -102,8 +110,8 @@ fn rocket() -> _ {
 	rocket::build()
 		.mount("/", routes![
 			favicon,
-			get_feed, get_post, create_post, delete_post, get_user,
-			get_login, login, get_register, register, signout
+			get_feed, get_post, create_post, delete_post, get_user, get_login, get_register,
+			login, register, signout, delete_account
 		])
 		.mount("/static", FileServer::from("./static"))
 
@@ -439,5 +447,21 @@ fn signout(jar: &CookieJar<'_>) -> Redirect {
 
 	jar.remove_private(Cookie::named("username"));
 	Redirect::to("/")
+
+}
+
+#[post("/delete_account", data = "<delete_input>")]
+async fn delete_account(jar: &CookieJar<'_>, delete_input: Form<DeleteAccountInput>) -> Redirect {
+
+	let userdata: Userdata = jar.into();
+	match userdata.username {
+		Some(username) => {
+			match database::delete_account(&username, delete_input.preserve_posts).await {
+				Ok(_) => signout(jar),
+				Err(_) => Redirect::to("/"),
+			}
+		},
+		None => Redirect::to("/"),
+	}
 
 }

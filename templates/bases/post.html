@@ -1,6 +1,10 @@
 <div class="post" onclick="window.location.href = '/post/{{ base_post.id }}#current_post'">
 	<div class="post_header">
+		{% if base_post.username %}
 		<a href="/user/{{ base_post.username }}" class="handle">@{{ base_post.username }}</a>
+		{% else %}
+		account has been deleted
+		{% endif %}
 		<span class="post_info_container">{{ base_post.time }}</span>
 	</div>
 	<div class="post_body">

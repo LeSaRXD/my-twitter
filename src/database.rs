@@ -103,6 +103,29 @@ pub async fn register(username: &String, password: &String) -> Result<Account, s
 
 }
 
+pub async fn delete_account(username: &String, preserve_posts: bool) -> Result<Uuid, sqlx::Error> {
+
+	let id = sqlx::query!(
+		"DELETE FROM account WHERE username=$1 RETURNING id;",
+		username
+	)
+	.fetch_one(POOL.get().await)
+	.await
+	.map(|r| r.id)?;
+
+	if !preserve_posts {
+		sqlx::query!(
+			"UPDATE post SET deleted=TRUE WHERE poster_id=$1;",
+			id
+		)
+		.execute(POOL.get().await)
+		.await.map(|_| id)
+	} else {
+		Ok(id)
+	}
+
+}
+
 
 
 // posts

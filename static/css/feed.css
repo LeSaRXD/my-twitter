@@ -12,8 +12,6 @@
 	align-items: start;
 	justify-content: start;
 	gap: 0.5rem;
-
-	padding: 1rem;
 }
 #create_post_input{
 	align-self: stretch;
