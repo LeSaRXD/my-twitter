@@ -101,11 +101,20 @@ fn rocket() -> _ {
 
 	rocket::build()
 		.mount("/", routes![
+			favicon,
 			get_feed, get_post, create_post, delete_post, get_user,
 			get_login, login, get_register, register, signout
 		])
 		.mount("/static", FileServer::from("./static"))
 
+}
+
+
+
+// favicon
+#[get("/favicon.ico")]
+fn favicon() -> Redirect {
+	Redirect::permanent(uri!("/static/favicon.ico"))
 }
 
 
@@ -319,7 +328,7 @@ async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<Strin
 	// rendering the template
 	match TERA.render("user.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
-		Err(_) => Err(Status::InternalServerError)
+		Err(_) => Err(Status::InternalServerError),
 	}
 	
 }

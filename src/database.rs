@@ -49,7 +49,7 @@ pub struct Account {
 // accounts
 async fn get_uuid_by_username(username: &String) -> Result<Uuid, sqlx::Error> {
 
-	sqlx::query!("SELECT id FROM account WHERE username=$1", username)
+	sqlx::query!("SELECT id FROM account WHERE username=$1;", username)
 		.fetch_one(POOL.get().await)
 		.await.map(|r| r.id)
 
@@ -57,7 +57,7 @@ async fn get_uuid_by_username(username: &String) -> Result<Uuid, sqlx::Error> {
 
 pub async fn get_username_by_uuid(uuid: &Uuid) -> Result<String, sqlx::Error> {
 
-	match sqlx::query!("SELECT username FROM account WHERE id=$1", uuid)
+	match sqlx::query!("SELECT username FROM account WHERE id=$1;", uuid)
 		.fetch_one(POOL.get().await)
 		.await {
 			Ok(r) => Ok(r.username),

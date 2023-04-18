@@ -32,6 +32,7 @@
 }
 
 .post{
+	flex-basis: auto;
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;

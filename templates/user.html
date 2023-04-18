@@ -11,12 +11,9 @@
 <div class="content">
 	
 	{% for post in posts %}
-	{% if not post.base.is_reply %}
-
 	<hr>
-	{% include 'post_with_reply.html' %}
+	{% include 'bases/post_with_reply.html' %}
 
-	{% endif %}
 	{% endfor %}
 
 </div>
