@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# tokio = { version = "1", features = ["full"] }
 rocket = { git = "https://github.com/SergioBenitez/Rocket/", rev = "91f6288", features = [ "uuid", "secrets" ] }
 sqlx = { version = "0.6.3", features = [ "runtime-tokio-rustls", "postgres", "uuid", "chrono" ] }
 tera = { version = "1.18.1", default-features = false }

@@ -22,16 +22,6 @@
 	border-radius: 20px;
 }
 
-.alert{
-	padding: 0.5rem;
-	border-radius: 10px;
-
-	background: #ce6464;
-	color: #fff;
-
-	font-size: 1.5rem;
-}
-
 #form_container{
 	display: flex;
 	flex-direction: column;

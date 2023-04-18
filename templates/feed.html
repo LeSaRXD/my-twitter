@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'bases/base.html' %}
 
 {% block title %}Homepage{% endblock %}
 
@@ -8,25 +8,23 @@
 
 {% block content %}
 
-{% if userdata.username %}
-
-<form id="create_post_container" method="post" action="/create_post">
-	<h2>Create a post</h2>
-	<textarea id="create_post_input" rows="8" name="body" placeholder="Write something" required></textarea>
-	<button id="create_post_button" type="submit">Post!</button>
-</form>
-
-{% endif %}
-
 <div class="content">
-	
-	{% for post in posts %}
-	{% if not post.base.is_reply %}
 
-	<hr>
-	{% include 'post_with_reply.html' %}
+	{% if userdata.username %}
+
+	<form id="create_post_container" method="post" action="/create_post">
+		<h2>Create a post</h2>
+		<textarea id="create_post_input" rows="8" name="body" placeholder="Write something" required></textarea>
+		<button id="create_post_button" type="submit">Post!</button>
+	</form>
 
 	{% endif %}
+
+	{% for post in posts %}
+
+	{% include 'bases/post_with_reply.html' %}
+	<hr>
+
 	{% endfor %}
 
 </div>

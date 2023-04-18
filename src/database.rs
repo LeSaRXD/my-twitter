@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use futures::TryFutureExt;
-use sqlx::{Postgres, Pool, FromRow, ConnectOptions};
+use sqlx::{Postgres, Pool, ConnectOptions};
 use sqlx::postgres::{PgPoolOptions, PgConnectOptions};
 use sqlx::types::{Uuid, chrono::NaiveDateTime};
 use async_once::AsyncOnce;
@@ -26,7 +26,6 @@ lazy_static! {
 
 }
 
-#[derive(FromRow)]
 pub struct Post {
 	pub id: Uuid,
 	pub poster_id: Uuid,
@@ -35,7 +34,7 @@ pub struct Post {
 	pub likes: i32,
 	pub deleted: bool,
 	pub is_reply: bool,
-	parent_id: Option<Uuid>,
+	pub parent_id: Option<Uuid>,
 }
 
 pub struct Account {

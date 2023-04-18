@@ -1,5 +1,5 @@
 {% set base_post = post.base %}
-{% include 'base_post.html' %}
+{% include 'bases/post.html' %}
 
 {% if post.reply %}
 <div class="reply_container">
@@ -9,7 +9,7 @@
 
 	<div class="replies">
 	{% set base_post = post.reply %}
-	{% include 'base_post.html' %}
+	{% include 'bases/post.html' %}
 	</div>
 </div>
 {% endif %}

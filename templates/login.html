@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'bases/base.html' %}
 
 {% block title %}Login{% endblock %}
 {% block styles %}/static/css/login_register.css{% endblock %}
@@ -13,10 +13,6 @@
 	<hr>
 
 	<div id="background">
-		{% if flash %}
-		<div class="alert">{{ flash }}</div>
-		{% endif %}
-		
 		<form id="form_container" method="post">
 			<h2>Enter your login</h2>
 			<input type="text" name="username" placeholder="Enter your login here" required />

@@ -1,9 +1,16 @@
 :root{
 	--accent-color: rgb(36, 193, 255);
 }
-
 html, body{
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: start;
+	overflow: hidden;
+
 	margin: 0;
+
+	height: 150%;
 
 	background: #000;
 	color: #fff;
@@ -11,6 +18,7 @@ html, body{
 	font-family: arial;
 	font-size: 18px;
 }
+
 h1, h2, h3{
 	margin: 0;
 }
@@ -76,6 +84,11 @@ hr{
 	height: calc(100% - 1rem);
 }
 
+.content{
+	flex-grow: 1;
+	overflow-y: auto;
+}
+
 .underline{
 	text-decoration: underline;
 }
@@ -84,10 +97,7 @@ hr{
 }
 
 header{
-	position: sticky;
-	top: 0px;
 	height: 2rem;
-	z-index: 999;
 
 	display: flex;
 	align-items: center;

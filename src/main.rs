@@ -65,11 +65,13 @@ pub struct BaseTemplatePost {
 	pub likes: i32,
 	pub deleted: bool,
 	pub is_reply: bool,
+	pub parent_id: Option<String>,
 }
 
 impl BaseTemplatePost {
 
 	pub async fn from(post: &database::Post) -> Result<Self, sqlx::Error> {
+
 		Ok(Self {
 			id: post.id.to_string(),
 			username: database::get_username_by_uuid(&post.poster_id).await?,
@@ -77,8 +79,10 @@ impl BaseTemplatePost {
 			time: timestamps::format_timestamp(post.time),
 			likes: post.likes,
 			deleted: post.deleted,
-			is_reply: post.is_reply
+			is_reply: post.is_reply,
+			parent_id: post.parent_id.map(|id| id.to_string()),
 		})
+		
 	}
 
 }
@@ -147,7 +151,9 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 	let db_posts = match database::get_posts(100).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
-	};
+	}.into_iter()
+	.filter(|p| !p.deleted && !p.is_reply).collect();
+
 	let posts = match db_posts_to_template_posts(db_posts).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
@@ -158,7 +164,10 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 	// rendering the template
 	match TERA.render("feed.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
-		Err(_) => Err(Status::InternalServerError),
+		Err(e) => {
+			println!("{}", e);
+			Err(Status::InternalServerError)
+		},
 	}
 
 }
@@ -176,14 +185,15 @@ async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>,
 
 	// inserting post
 	let post = match database::get_post(&post_id).await {
-		Ok(post) => match BaseTemplatePost::from(&post).await {
-			Ok(p) => p,
-			Err(_) => return Err(Status::InternalServerError),
-		},
+		Ok(p) => p,
 		Err(_) => return Err(Status::NotFound),
 	};
+	let template_post = match BaseTemplatePost::from(&post).await {
+		Ok(p) => p,
+		Err(_) => return Err(Status::InternalServerError),
+	};
 
-	context.insert("base_post", &post);
+	context.insert("current_post", &template_post);
 
 	// inserting replies
 	let db_replies = match database::get_replies(100, post_id).await {
@@ -197,10 +207,36 @@ async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>,
 
 	context.insert("replies", &replies);
 
+
+
 	// rendering the template
-	match TERA.render("post.html", &context) {
-		Ok(s) => Ok(RawHtml(s)),
-		Err(_) => Err(Status::InternalServerError),
+	match post.parent_id {
+		None => match TERA.render("post.html", &context) {
+			Ok(s) => Ok(RawHtml(s)),
+			Err(e) => {
+				println!("{}", e);
+				Err(Status::InternalServerError)
+			},
+		},
+		Some(parent_id) => {
+
+			// inserting parent
+			let parent_post = match database::get_post(&parent_id).await {
+				Ok(post) => match BaseTemplatePost::from(&post).await {
+					Ok(p) => p,
+					Err(_) => return Err(Status::InternalServerError),
+				},
+				Err(_) => return Err(Status::NotFound),
+			};
+
+			context.insert("parent_post", &parent_post);
+
+			match TERA.render("reply_post.html", &context) {
+				Ok(s) => Ok(RawHtml(s)),
+				Err(_) => Err(Status::InternalServerError),
+			}
+
+		},
 	}
 
 }
