@@ -133,7 +133,7 @@ pub async fn get_posts(post_amount: i64) -> Result<Vec<Post>, sqlx::Error> {
 
 	sqlx::query_as!(
 		Post, 
-		"SELECT * FROM post ORDER BY time DESC LIMIT $1",
+		"SELECT * FROM post WHERE is_reply=FALSE ORDER BY time DESC LIMIT $1",
 		post_amount
 	)
 	.fetch_all(POOL.get().await)
@@ -145,7 +145,7 @@ pub async fn get_posts_by_user(post_amount: i64, username: &String) -> Result<Ve
 
 	sqlx::query_as!(
 		Post, 
-		"SELECT * FROM post WHERE poster_id=$1 ORDER BY time DESC LIMIT $2",
+		"SELECT * FROM post WHERE poster_id=$1 AND is_reply=FALSE ORDER BY time DESC LIMIT $2",
 		get_uuid_by_username(username).await?,
 		post_amount
 	)

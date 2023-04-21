@@ -186,9 +186,8 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 	let db_posts = match database::get_posts(100).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
-	}.into_iter()
-	.filter(|p| !p.deleted && !p.is_reply).collect();
-
+	};
+	
 	let posts = match db_posts_to_template_posts(db_posts).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
