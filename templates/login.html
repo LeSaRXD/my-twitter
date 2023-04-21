@@ -13,6 +13,10 @@
 	<hr>
 
 	<div id="background">
+		{% if error %}
+		<div id="error"><h3>{{ error }}</h3></div>
+		{% endif %}
+		
 		<form id="form_container" method="post">
 			<h2>Enter your login</h2>
 			<input type="text" name="username" placeholder="Enter your login here" required />

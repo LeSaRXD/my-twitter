@@ -8,7 +8,7 @@ mod passwords;
 use rocket::{
 	response::{content::RawHtml, status, Redirect},
 	fs::FileServer,
-	http::{CookieJar, Status, Cookie},
+	http::{CookieJar, Status, Cookie, uri::Origin},
 	serde::uuid::Uuid,
 	form::{Form, FromForm},
 };
@@ -103,18 +103,36 @@ pub struct ReplyTemplatePost {
 
 
 
-
 #[launch]
 fn rocket() -> _ {
 
 	rocket::build()
 		.mount("/", routes![
+			test_page,
 			favicon,
 			get_feed, get_post, create_post, delete_post, get_user, get_login, get_register,
 			login, register, signout, delete_account
 		])
 		.mount("/static", FileServer::from("./static"))
 
+}
+
+
+
+#[get("/test")]
+fn test_page(origin: &Origin) -> String {
+	match origin.query() {
+		Some(q) => {
+
+			q.segments()
+			.into_iter()
+			.map(|p| {format!("{}: {}", p.0, p.1)})
+			.collect::<Vec<String>>()
+			.join("\n")
+
+		},
+		None => "No query provided".to_string(),
+	}
 }
 
 
@@ -346,24 +364,43 @@ async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<Strin
 // accounts
 
 #[get("/login")]
-fn get_login(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
+fn get_login(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, Status> {
 
 	let userdata: Userdata = jar.into();
+
+	// creating template context
+	let mut context = Context::new();
+
+	match origin.query() {
+		Some(q) => {
+			for pair in q.segments().into_iter() {
+				match pair {
+					("err", "pw") => {
+						context.insert("error", "Incorrect password!");
+						break;
+					},
+					("err", "login") => {
+						context.insert("error", "The user with this login doesn't exist");
+						break;
+					},
+					(_, _) => (),
+				};
+			}
+		},
+		None => (),
+	};
 
 	match userdata.username {
 		Some(_) => Err(Status::BadRequest),
 		None => {
-			// creating template context
-			let mut context = Context::new();
-		
 			// inserting user data
 			context.insert("userdata", &userdata);
 
+			// render the template
 			match TERA.render("login.html", &context) {
 				Ok(s) => Ok(RawHtml(s)),
 				Err(_) => Err(Status::InternalServerError)
 			}
-			
 		}
 	}
 
@@ -397,15 +434,35 @@ async fn login(jar: &CookieJar<'_>, login_input: Form<AuthInput>) -> Result<Redi
 }
 
 #[get("/register")]
-fn get_register(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
+fn get_register(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, Status> {
+
+	// creating template context
+	let mut context = Context::new();
+	
+	match origin.query() {
+		Some(q) => {
+			for pair in q.segments().into_iter() {
+				match pair {
+					("err", "pw") => {
+						context.insert("error", "Please enter a valid password");
+						break;
+					},
+					("err", "login") => {
+						context.insert("error", "User with this login already exists");
+						break;
+					},
+					(_, _) => (),
+				};
+			}
+		},
+		None => (),
+	};
 
 	let userdata: Userdata = jar.into();
 
 	match userdata.username {
 		Some(_) => Err(Status::BadRequest),
 		None => {
-			// creating template context
-			let mut context = Context::new();
 		
 			// inserting user data
 			context.insert("userdata", &userdata);
@@ -429,7 +486,12 @@ async fn register(jar: &CookieJar<'_>, register_input: Form<AuthInput>) -> Resul
 			None => return Err(status::BadRequest(Some("No login provided"))),
 		},
 		match &register_input.password {
-			Some(p) => p,
+			Some(p) => {
+				if p.len() < 8 {
+					return Ok(Redirect::to("/register?err=pw"))
+				}
+				p
+			},
 			None => return Err(status::BadRequest(Some("No password provided"))),
 		}
 	).await {

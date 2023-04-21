@@ -18,6 +18,8 @@
 	margin: 1rem;
 	padding: 1rem;
 
+	overflow: hidden;
+
 	background: #111;
 	border-radius: 20px;
 }
@@ -31,4 +33,24 @@
 }
 #form_button{
 	margin: 0;
+}
+
+#error{
+	position: relative;
+
+	padding: 0.3rem;
+	
+	background: #a00;
+	border-radius: 10px;
+
+	animation: error_in 0.5s ease-out;
+}
+
+@keyframes error_in {
+	0% {
+		top: -5rem;
+	}
+	100% {
+		top: 0;
+	}
 }
