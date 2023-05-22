@@ -67,7 +67,7 @@ pub struct BaseTemplatePost {
 	pub username: Option<String>,
 	pub body: String,
 	pub time: String,
-	pub likes: i32,
+	pub likes: i64,
 	pub deleted: bool,
 	pub is_reply: bool,
 	pub parent_id: Option<String>,
@@ -85,7 +85,7 @@ impl BaseTemplatePost {
 			},
 			body: post.body.to_owned(),
 			time: timestamps::format_timestamp(post.time),
-			likes: post.likes,
+			likes: database::get_post_likes(&post.id).await?,
 			deleted: post.deleted,
 			is_reply: post.is_reply,
 			parent_id: post.parent_id.map(|id| id.to_string()),
@@ -108,31 +108,13 @@ fn rocket() -> _ {
 
 	rocket::build()
 		.mount("/", routes![
-			test_page,
 			favicon,
-			get_feed, get_post, create_post, delete_post, get_user, get_login, get_register,
+			get_feed, get_post, create_post, delete_post, like_post,
+			get_user, get_login, get_register,
 			login, register, signout, delete_account
 		])
 		.mount("/static", FileServer::from("./static"))
 
-}
-
-
-
-#[get("/test")]
-fn test_page(origin: &Origin) -> String {
-	match origin.query() {
-		Some(q) => {
-
-			q.segments()
-			.into_iter()
-			.map(|p| {format!("{}: {}", p.0, p.1)})
-			.collect::<Vec<String>>()
-			.join("\n")
-
-		},
-		None => "No query provided".to_string(),
-	}
 }
 
 
@@ -163,7 +145,7 @@ async fn db_posts_to_template_posts(db_posts: Vec<database::Post>) -> Result<Vec
 		})
 	)
 	.await
-	// catch any errors
+	// convert from vec<result<template, error>> into result<vec<template>, error>
 	.into_iter()
 	.collect::<Result<Vec<ReplyTemplatePost>, sqlx::Error>>()
 
@@ -187,7 +169,7 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
 	};
-	
+
 	let posts = match db_posts_to_template_posts(db_posts).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
@@ -324,6 +306,22 @@ async fn delete_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<Redirect, Sta
 
 }
 
+#[get("/like_post/<post_id>")]
+async fn like_post(jar: &CookieJar<'_>, post_id: Uuid) -> Status {
+
+	let userdata: Userdata = jar.into();
+	match userdata.username {
+		Some(username) => {
+			match database::like_post(&post_id, &username).await {
+				Ok(_) => Status::Ok,
+				Err(_) => Status::BadRequest
+			}
+		},
+		None => Status::Unauthorized
+	}
+
+}
+
 #[get("/user/<username>")]
 async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<String>, Status> {
 
@@ -370,24 +368,21 @@ fn get_login(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, St
 	// creating template context
 	let mut context = Context::new();
 
-	match origin.query() {
-		Some(q) => {
-			for pair in q.segments().into_iter() {
-				match pair {
-					("err", "pw") => {
-						context.insert("error", "Incorrect password!");
-						break;
-					},
-					("err", "login") => {
-						context.insert("error", "The user with this login doesn't exist");
-						break;
-					},
-					(_, _) => (),
-				};
-			}
-		},
-		None => (),
-	};
+	if let Some(q) = origin.query() {
+		for pair in q.segments() {
+			match pair {
+				("err", "pw") => {
+					context.insert("error", "Incorrect password!");
+					break;
+				},
+				("err", "login") => {
+					context.insert("error", "The user with this login doesn't exist");
+					break;
+				},
+				(_, _) => (),
+			};
+		}
+	}
 
 	match userdata.username {
 		Some(_) => Err(Status::BadRequest),
@@ -438,24 +433,21 @@ fn get_register(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>,
 	// creating template context
 	let mut context = Context::new();
 	
-	match origin.query() {
-		Some(q) => {
-			for pair in q.segments().into_iter() {
-				match pair {
-					("err", "pw") => {
-						context.insert("error", "Please enter a valid password");
-						break;
-					},
-					("err", "login") => {
-						context.insert("error", "User with this login already exists");
-						break;
-					},
-					(_, _) => (),
-				};
-			}
-		},
-		None => (),
-	};
+	if let Some(q) = origin.query() {
+		for pair in q.segments() {
+			match pair {
+				("err", "pw") => {
+					context.insert("error", "Please enter a valid password");
+					break;
+				},
+				("err", "login") => {
+					context.insert("error", "User with this login already exists");
+					break;
+				},
+				(_, _) => (),
+			};
+		}
+	}
 
 	let userdata: Userdata = jar.into();
 
@@ -526,3 +518,4 @@ async fn delete_account(jar: &CookieJar<'_>, delete_input: Form<DeleteAccountInp
 	}
 
 }
+

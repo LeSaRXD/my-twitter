@@ -31,7 +31,6 @@ pub struct Post {
 	pub poster_id: Uuid,
 	pub body: String,
 	pub time: NaiveDateTime,
-	pub likes: i32,
 	pub deleted: bool,
 	pub is_reply: bool,
 	pub parent_id: Option<Uuid>,
@@ -158,7 +157,7 @@ pub async fn get_replies(reply_amount: i64, parent_id: Uuid) -> Result<Vec<Post>
 
 	sqlx::query_as!(
 		Post, 
-		"SELECT * FROM post WHERE parent_id=$1 ORDER BY likes DESC LIMIT $2",
+		"SELECT * FROM post WHERE parent_id=$1 ORDER BY (SELECT COUNT(*) FROM vote WHERE post_id=post_id) DESC LIMIT $2",
 		parent_id,
 		reply_amount
 	)
@@ -215,11 +214,39 @@ pub async fn delete_post(post_id: &Uuid, username: &String) -> Result<Option<Uui
 
 	let uuid = get_uuid_by_username(username).await?;
 	
-	match sqlx::query!("UPDATE POST SET deleted=TRUE WHERE id=$1 AND poster_id=$2 RETURNING parent_id;", post_id, uuid)
+ 	sqlx::query!("UPDATE POST SET deleted=TRUE WHERE id=$1 AND poster_id=$2 RETURNING parent_id;", post_id, uuid)
 		.fetch_one(POOL.get().await)
-		.await {
-			Ok(r) => Ok(r.parent_id),
-			Err(e) => Err(e),
-		}
+		.await
+		.map(|r| r.parent_id)
+
+}
+
+pub async fn like_post(post_id: &Uuid, username: &String) -> Result<bool, sqlx::Error> {
+
+	let uuid = get_uuid_by_username(username).await?;
+	match sqlx::query!("WITH deleted AS (DELETE FROM vote WHERE post_id=$1 AND account_id=$2 RETURNING *) SELECT COUNT(*) FROM deleted", post_id, uuid)
+		.fetch_one(POOL.get().await)
+		.await?
+		.count {
+
+		Some(0) | None => {
+
+			sqlx::query!("INSERT INTO vote (post_id, account_id) VALUES ($1, $2) RETURNING TRUE", post_id, uuid)
+				.fetch_one(POOL.get().await)
+				.await
+				.map(|r| r.bool.unwrap_or(false))
+
+		},
+		_ => Ok(false),
+	}
+
+}
+
+pub async fn get_post_likes(post_id: &Uuid) -> Result<i64, sqlx::Error> {
+
+	sqlx::query!("SELECT COUNT(*) FROM vote WHERE post_id=$1", post_id)
+		.fetch_one(POOL.get().await)
+		.await
+		.map(|r| r.count.unwrap_or(0))
 
 }
