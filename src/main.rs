@@ -68,6 +68,7 @@ pub struct BaseTemplatePost {
 	pub body: String,
 	pub time: String,
 	pub likes: i64,
+	pub liked_by_user: bool,
 	pub deleted: bool,
 	pub is_reply: bool,
 	pub parent_id: Option<String>,
@@ -75,7 +76,7 @@ pub struct BaseTemplatePost {
 
 impl BaseTemplatePost {
 
-	pub async fn from(post: &database::Post) -> Result<Self, sqlx::Error> {
+	pub async fn from(post: &database::Post, username: &Option<String>) -> Result<Self, sqlx::Error> {
 
 		Ok(Self {
 			id: post.id.to_string(),
@@ -86,6 +87,10 @@ impl BaseTemplatePost {
 			body: post.body.to_owned(),
 			time: timestamps::format_timestamp(post.time),
 			likes: database::get_post_likes(&post.id).await?,
+			liked_by_user: match username {
+				Some(name) => database::is_liked_by(&post.id, name).await?,
+				None => false,
+			},
 			deleted: post.deleted,
 			is_reply: post.is_reply,
 			parent_id: post.parent_id.map(|id| id.to_string()),
@@ -129,16 +134,16 @@ fn favicon() -> Redirect {
 
 // posts
 
-async fn db_posts_to_template_posts(db_posts: Vec<database::Post>) -> Result<Vec<ReplyTemplatePost>, sqlx::Error> {
+async fn db_posts_to_template_posts(db_posts: Vec<database::Post>, username: &Option<String>) -> Result<Vec<ReplyTemplatePost>, sqlx::Error> {
 	
 	future::join_all(
 		db_posts
 		.iter()
 		.map(|post| async {
 			Ok(ReplyTemplatePost {
-				base: BaseTemplatePost::from(post).await?,
+				base: BaseTemplatePost::from(post, username).await?,
 				reply: match database::get_replies(1, post.id).await?.get(0) {
-					Some(p) => Some(BaseTemplatePost::from(p).await?),
+					Some(p) => Some(BaseTemplatePost::from(p, username).await?),
 					None => None,
 				},
 			})
@@ -170,7 +175,7 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 		Err(_) => return Err(Status::InternalServerError),
 	};
 
-	let posts = match db_posts_to_template_posts(db_posts).await {
+	let posts = match db_posts_to_template_posts(db_posts, &userdata.username).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
 	};
@@ -204,7 +209,7 @@ async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>,
 		Ok(p) => p,
 		Err(_) => return Err(Status::NotFound),
 	};
-	let template_post = match BaseTemplatePost::from(&post).await {
+	let template_post = match BaseTemplatePost::from(&post, &userdata.username).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
 	};
@@ -216,7 +221,7 @@ async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>,
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
 	};
-	let replies = match db_posts_to_template_posts(db_replies).await {
+	let replies = match db_posts_to_template_posts(db_replies, &userdata.username).await {
 		Ok(r) => r,
 		Err(_) => return Err(Status::InternalServerError),
 	};
@@ -238,7 +243,7 @@ async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>,
 
 			// inserting parent
 			let parent_post = match database::get_post(&parent_id).await {
-				Ok(post) => match BaseTemplatePost::from(&post).await {
+				Ok(post) => match BaseTemplatePost::from(&post, &userdata.username).await {
 					Ok(p) => p,
 					Err(_) => return Err(Status::InternalServerError),
 				},
@@ -341,7 +346,7 @@ async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<Strin
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
 	};
-	let posts = match db_posts_to_template_posts(db_posts).await {
+	let posts = match db_posts_to_template_posts(db_posts, &userdata.username).await {
 		Ok(p) => p,
 		Err(_) => return Err(Status::InternalServerError),
 	};

@@ -250,3 +250,16 @@ pub async fn get_post_likes(post_id: &Uuid) -> Result<i64, sqlx::Error> {
 		.map(|r| r.count.unwrap_or(0))
 
 }
+
+pub async fn is_liked_by(post_id: &Uuid, username: &String) -> Result<bool, sqlx::Error> {
+
+	let uuid = get_uuid_by_username(username).await?;
+
+	match sqlx::query!("SELECT TRUE FROM vote WHERE post_id=$1 AND account_id=$2", post_id, uuid)
+		.fetch_optional(POOL.get().await)
+		.await? {
+		Some(r) => Ok(r.bool.unwrap_or(false)),
+		None => Ok(false),
+	}
+
+}

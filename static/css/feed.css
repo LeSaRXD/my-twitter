@@ -47,7 +47,8 @@
 .post_header{
 	display: flex;
 	flex-direction: row;
-	align-items: stretch;
+	align-items: center;
+	justify-content: space-between;
 }
 .post_body{
 	margin: 5px 0px;
@@ -59,11 +60,27 @@
 .post_footer{
 	display: flex;
 	flex-direction: row;
-	align-items: stretch;
+	align-items: center;
+	justify-content: space-between;
 }
 .post_info_container{
 	color: rgba(255, 255, 255, 0.7);
-	margin-left: auto;
+}
+
+.like_button {
+	display: flex;
+	align-items: center;
+	gap: 0.2rem;
+
+	cursor: pointer;
+
+	margin: 0;
+	padding: 5px;
+	background: none;
+	border: none;
+}
+.like_icon {
+	height: 1rem;
 }
 
 .reply_container{
