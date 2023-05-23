@@ -7,6 +7,7 @@
 		{% endif %}
 		<span class="post_info_container">{{ base_post.time }}</span>
 	</div>
+
 	<div class="post_body">
 		{% if base_post.deleted %}
 		post has been deleted
@@ -14,6 +15,8 @@
 		<pre>{{ base_post.body }}</pre>
 		{% endif %}
 	</div>
+
+	{% if not base_post.deleted %}
 	<div class="post_footer">
 		{% if userdata.username %}
 		<button class="like_button" data-id="{{ base_post.id }}">
@@ -37,4 +40,5 @@
 		</span>
 		{% endif %}
 	</div>
+	{% endif %}
 </div>

@@ -318,8 +318,8 @@ async fn like_post(jar: &CookieJar<'_>, post_id: Uuid) -> Status {
 	match userdata.username {
 		Some(username) => {
 			match database::like_post(&post_id, &username).await {
-				Ok(_) => Status::Ok,
-				Err(_) => Status::BadRequest
+				Ok(true) => Status::Ok,
+				Ok(false) | Err(_) => Status::BadRequest,
 			}
 		},
 		None => Status::Unauthorized

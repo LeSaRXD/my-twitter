@@ -214,7 +214,11 @@ pub async fn delete_post(post_id: &Uuid, username: &String) -> Result<Option<Uui
 
 	let uuid = get_uuid_by_username(username).await?;
 	
- 	sqlx::query!("UPDATE POST SET deleted=TRUE WHERE id=$1 AND poster_id=$2 RETURNING parent_id;", post_id, uuid)
+	sqlx::query!("DELETE FROM vote WHERE post_id=$1", post_id)
+		.execute(POOL.get().await)
+		.await?;
+
+ 	sqlx::query!("UPDATE post SET deleted=TRUE WHERE id=$1 AND poster_id=$2 RETURNING parent_id;", post_id, uuid)
 		.fetch_one(POOL.get().await)
 		.await
 		.map(|r| r.parent_id)
@@ -224,20 +228,32 @@ pub async fn delete_post(post_id: &Uuid, username: &String) -> Result<Option<Uui
 pub async fn like_post(post_id: &Uuid, username: &String) -> Result<bool, sqlx::Error> {
 
 	let uuid = get_uuid_by_username(username).await?;
-	match sqlx::query!("WITH deleted AS (DELETE FROM vote WHERE post_id=$1 AND account_id=$2 RETURNING *) SELECT COUNT(*) FROM deleted", post_id, uuid)
+
+	if !sqlx::query!("SELECT deleted FROM post WHERE id=$1", post_id)
 		.fetch_one(POOL.get().await)
 		.await?
-		.count {
+		.deleted
+	{
+		match sqlx::query!("SELECT EXISTS(SELECT * FROM vote WHERE post_id=$1 AND account_id=$2)", post_id, uuid)
+			.fetch_one(POOL.get().await)
+			.await?
+			.exists
+		{
+			Some(true) => {
+				sqlx::query!("DELETE FROM vote WHERE post_id=$1 AND account_id=$2", post_id, uuid)
+					.execute(POOL.get().await)
+					.await?
+			},
+			_ => {
+				sqlx::query!("INSERT INTO vote (post_id, account_id) VALUES ($1, $2)", post_id, uuid)
+					.execute(POOL.get().await)
+					.await?
+			},
+		};
 
-		Some(0) | None => {
-
-			sqlx::query!("INSERT INTO vote (post_id, account_id) VALUES ($1, $2) RETURNING TRUE", post_id, uuid)
-				.fetch_one(POOL.get().await)
-				.await
-				.map(|r| r.bool.unwrap_or(false))
-
-		},
-		_ => Ok(false),
+		Ok(true)
+	} else {
+		Ok(false)
 	}
 
 }
