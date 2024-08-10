@@ -1,103 +1,113 @@
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 
+mod crypto;
 mod database;
+mod helpers;
 mod timestamps;
-mod passwords;
 
-use rocket::{
-	response::{content::RawHtml, status, Redirect},
-	fs::FileServer,
-	http::{CookieJar, Status, Cookie, uri::Origin},
-	serde::uuid::Uuid,
-	form::{Form, FromForm},
+use database::{
+	types::{AccountId, PostId},
+	Account, AccountError, Post,
 };
-use tera::{Tera, Context};
-use serde::Serialize;
 use futures::future;
-
-
+use helpers::{CookieJarHelper, ErrorHelper};
+use rocket::{
+	form::{Form, FromForm},
+	fs::FileServer,
+	http::{uri::Origin, Cookie, CookieJar, Status},
+	response::{content::RawHtml, Redirect},
+};
+use rocket_dyn_templates::tera::{Context, Tera};
+use serde::Serialize;
+use std::sync::LazyLock;
 
 // global constants
-lazy_static! {
+static TERA: LazyLock<Tera> = LazyLock::new(|| {
+	Tera::new("./templates/**/*.html").expect("Could not load templates from ./templates")
+});
 
-	static ref TERA: Tera = match Tera::new("./templates/**/*.html") {
-		Ok(t) => t,
-		Err(e) => panic!("Error!\n{}", e),
-	};
-
-}
-
-
-
+// session structs
 #[derive(Serialize)]
-struct Userdata {
-	username: Option<String>,
+struct SessionUser {
+	id: AccountId,
+	handle: Box<str>,
 }
-impl From<&CookieJar<'_>> for Userdata {
-	fn from(jar: &CookieJar) -> Self {
-		Self { 
-			username: jar.get_private("username").map(|c| c.value().to_string())
+impl SessionUser {
+	fn try_from_jar(jar: &CookieJar<'_>) -> Option<Self> {
+		Some(Self {
+			id: jar.get_private("id")?.value().parse::<u32>().ok()?.into(),
+			handle: jar.get_private("handle")?.value().into(),
+		})
+	}
+}
+#[derive(Serialize)]
+struct SessionData {
+	user: Option<SessionUser>,
+}
+impl<'a> From<&CookieJar<'a>> for SessionData {
+	fn from(value: &CookieJar<'a>) -> Self {
+		Self {
+			user: SessionUser::try_from_jar(value),
 		}
 	}
 }
 
 #[derive(FromForm)]
-struct AuthInput {
-	username: Option<String>,
-	password: Option<String>
+struct AuthInput<'a> {
+	username: Option<&'a str>,
+	password: Option<&'a str>,
 }
 
 #[derive(FromForm)]
 struct PostInput {
 	body: Option<String>,
-	parent_id: Option<Uuid>,
+	parent_id: Option<PostId>,
 }
-
-#[derive(FromForm)]
-struct DeleteAccountInput {
-	preserve_posts: bool
-}
-
-
 
 #[derive(Serialize)]
 pub struct BaseTemplatePost {
-	pub id: String,
-	pub username: Option<String>,
-	pub body: String,
-	pub time: String,
-	pub likes: i64,
+	pub id: u64,
+	pub author_id: u32,
+	pub author_name: Box<str>,
+	pub author_handle: Box<str>,
+	pub body: Box<str>,
+	pub create_time: Box<str>,
+	pub likes: u64,
 	pub liked_by_user: bool,
-	pub deleted: bool,
-	pub is_reply: bool,
-	pub parent_id: Option<String>,
+	pub parent_id: Option<u64>,
 }
 
 impl BaseTemplatePost {
+	async fn from_post(post: Post, user: &Option<SessionUser>) -> sqlx::Result<Self> {
+		let author = Account::find_by_id(post.author_id).await?;
+		let author_name = author
+			.as_ref()
+			.map(|acc| acc.display_name())
+			.unwrap_or("Account does not exist")
+			.into();
+		let author_handle = author
+			.map(|a| a.handle)
+			.unwrap_or_default()
+			.into_boxed_str();
 
-	pub async fn from(post: &database::Post, username: &Option<String>) -> Result<Self, sqlx::Error> {
+		let liked_by_user = match user {
+			Some(u) => post.voted_by(u.id).await.unwrap_or(false),
+			None => false,
+		};
 
 		Ok(Self {
-			id: post.id.to_string(),
-			username: match database::get_username_by_uuid(&post.poster_id).await {
-				Ok(u) => Some(u),
-				Err(_) => None,
-			},
-			body: post.body.to_owned(),
-			time: timestamps::format_timestamp(post.time),
-			likes: database::get_post_likes(&post.id).await?,
-			liked_by_user: match username {
-				Some(name) => database::is_liked_by(&post.id, name).await?,
-				None => false,
-			},
-			deleted: post.deleted,
-			is_reply: post.is_reply,
-			parent_id: post.parent_id.map(|id| id.to_string()),
+			id: post.id.0,
+			author_id: post.author_id.0,
+			author_name,
+			author_handle,
+			body: post.body,
+			create_time: timestamps::format_timestamp(post.create_time).into_boxed_str(),
+			likes: post.votes.0,
+			liked_by_user,
+			parent_id: post.parent_id.0.map(Into::into),
 		})
-		
 	}
-
 }
 
 #[derive(Serialize)]
@@ -105,24 +115,48 @@ pub struct ReplyTemplatePost {
 	base: BaseTemplatePost,
 	reply: Option<BaseTemplatePost>,
 }
-
-
+impl ReplyTemplatePost {
+	async fn from_posts(posts: Vec<Post>, user: &Option<SessionUser>) -> sqlx::Result<Vec<Self>> {
+		future::join_all(posts.into_iter().map(|post| async {
+			let mut replies = post.get_replies(1).await?;
+			Ok(Self {
+				base: BaseTemplatePost::from_post(post, user).await?,
+				reply: match replies.pop() {
+					Some(p) => Some(BaseTemplatePost::from_post(p, user).await?),
+					None => None,
+				},
+			})
+		}))
+		.await
+		// convert from vec<result<template, error>> into result<vec<template>, error>
+		.into_iter()
+		.collect::<sqlx::Result<Vec<Self>>>()
+	}
+}
 
 #[launch]
 fn rocket() -> _ {
-
 	rocket::build()
-		.mount("/", routes![
-			favicon,
-			get_feed, get_post, create_post, delete_post, like_post,
-			get_user, get_login, get_register,
-			login, register, signout, delete_account
-		])
+		.mount(
+			"/",
+			routes![
+				favicon,
+				get_feed,
+				get_post,
+				create_post,
+				delete_post,
+				like_post,
+				get_user,
+				get_login,
+				get_register,
+				login,
+				register,
+				signout,
+				delete_account
+			],
+		)
 		.mount("/static", FileServer::from("./static"))
-
 }
-
-
 
 // favicon
 #[get("/favicon.ico")]
@@ -130,225 +164,217 @@ fn favicon() -> Redirect {
 	Redirect::permanent(uri!("/static/favicon.ico"))
 }
 
-
-
 // posts
-
-async fn db_posts_to_template_posts(db_posts: Vec<database::Post>, username: &Option<String>) -> Result<Vec<ReplyTemplatePost>, sqlx::Error> {
-	
-	future::join_all(
-		db_posts
-		.iter()
-		.map(|post| async {
-			Ok(ReplyTemplatePost {
-				base: BaseTemplatePost::from(post, username).await?,
-				reply: match database::get_replies(1, post.id).await?.get(0) {
-					Some(p) => Some(BaseTemplatePost::from(p, username).await?),
-					None => None,
-				},
-			})
-		})
-	)
-	.await
-	// convert from vec<result<template, error>> into result<vec<template>, error>
-	.into_iter()
-	.collect::<Result<Vec<ReplyTemplatePost>, sqlx::Error>>()
-
-}
-
-
 
 #[get("/")]
 async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
-
-	let userdata: Userdata = jar.into();
+	let session_data: SessionData = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
 	// inserting user data
-	context.insert("userdata", &userdata);
-	
+	context.insert("user", &session_data.user);
+
 	// inserting posts
-	let db_posts = match database::get_posts(100).await {
+	let posts = match Post::get_recent(100).await {
 		Ok(p) => p,
-		Err(_) => return Err(Status::InternalServerError),
+		Err(e) => return e.print_and_err(),
 	};
 
-	let posts = match db_posts_to_template_posts(db_posts, &userdata.username).await {
+	let posts = match ReplyTemplatePost::from_posts(posts, &session_data.user).await {
 		Ok(p) => p,
-		Err(_) => return Err(Status::InternalServerError),
+		Err(e) => return e.print_and_err(),
 	};
-	
+
 	context.insert("posts", &posts);
 
 	// rendering the template
 	match TERA.render("feed.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
-		Err(e) => {
-			println!("{}", e);
-			Err(Status::InternalServerError)
-		},
+		Err(e) => e.print_and_err(),
 	}
-
 }
 
 #[get("/post/<post_id>")]
-async fn get_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<RawHtml<String>, Status> {
-
-	let userdata: Userdata = jar.into();
+async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String>, Status> {
+	let session_data: SessionData = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
 	// inserting user data
-	context.insert("userdata", &userdata);
+	context.insert("user", &session_data.user);
 
 	// inserting post
-	let post = match database::get_post(&post_id).await {
-		Ok(p) => p,
-		Err(_) => return Err(Status::NotFound),
+	let post = match Post::find_by_id(post_id).await {
+		Ok(Some(p)) => p,
+		Ok(None) => return Err(Status::NotFound),
+		Err(e) => return e.print_and_err(),
 	};
-	let template_post = match BaseTemplatePost::from(&post, &userdata.username).await {
-		Ok(p) => p,
-		Err(_) => return Err(Status::InternalServerError),
-	};
-
-	context.insert("current_post", &template_post);
-
 	// inserting replies
-	let db_replies = match database::get_replies(100, post_id).await {
+	let replies = match post.get_replies(100).await {
 		Ok(p) => p,
-		Err(_) => return Err(Status::InternalServerError),
+		Err(e) => return e.print_and_err(),
 	};
-	let replies = match db_posts_to_template_posts(db_replies, &userdata.username).await {
+	let replies = match ReplyTemplatePost::from_posts(replies, &session_data.user).await {
 		Ok(r) => r,
-		Err(_) => return Err(Status::InternalServerError),
+		Err(e) => return e.print_and_err(),
 	};
-
 	context.insert("replies", &replies);
 
-
+	let template_post = match BaseTemplatePost::from_post(post, &session_data.user).await {
+		Ok(p) => p,
+		Err(e) => return e.print_and_err(),
+	};
+	context.insert("current_post", &template_post);
 
 	// rendering the template
-	match post.parent_id {
+	match template_post.parent_id {
 		None => match TERA.render("post.html", &context) {
 			Ok(s) => Ok(RawHtml(s)),
-			Err(e) => {
-				println!("{}", e);
-				Err(Status::InternalServerError)
-			},
+			Err(e) => e.print_and_err(),
 		},
 		Some(parent_id) => {
-
 			// inserting parent
-			let parent_post = match database::get_post(&parent_id).await {
-				Ok(post) => match BaseTemplatePost::from(&post, &userdata.username).await {
-					Ok(p) => p,
-					Err(_) => return Err(Status::InternalServerError),
-				},
-				Err(_) => return Err(Status::NotFound),
+			let parent_post = match Post::find_by_id(PostId(parent_id)).await {
+				Ok(Some(post)) => {
+					match BaseTemplatePost::from_post(post, &session_data.user).await {
+						Ok(p) => p,
+						Err(e) => return e.print_and_err(),
+					}
+				}
+				Ok(None) => return Err(Status::NotFound),
+				Err(e) => return e.print_and_err(),
 			};
 
 			context.insert("parent_post", &parent_post);
 
 			match TERA.render("reply_post.html", &context) {
 				Ok(s) => Ok(RawHtml(s)),
-				Err(_) => Err(Status::InternalServerError),
+				Err(e) => e.print_and_err(),
 			}
-
-		},
+		}
 	}
-
 }
 
 #[post("/create_post", data = "<post_input>")]
 async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result<Redirect, Status> {
+	let session_data: SessionData = jar.into();
 
-	let userdata: Userdata = jar.into();
-	
-	match userdata.username {
-		Some(username) => {
-			match database::create_post(&username,
-				match &post_input.body {
-					Some(b) => b,
-					None => return Err(Status::BadRequest),
-				},
-				post_input.parent_id,
-			).await {
-				Ok(_) => Ok(Redirect::to(
-					match post_input.parent_id {
-						Some(id) => format!("/post/{}", id),
-						None => "/".to_string(),
-					}
-				)),
-				Err(_) => Err(Status::InternalServerError),
-			}
+	let body = match &post_input.body {
+		Some(b) => b.as_ref(),
+		None => return Err(Status::BadRequest),
+	};
+
+	let account = match session_data.user {
+		Some(user) => match Account::find_by_id(user.id).await {
+			Ok(Some(acc)) => acc,
+			Ok(None) => return Err(Status::Unauthorized),
+			Err(e) => return e.print_and_err(),
 		},
-		None => Err(Status::Unauthorized),
-	}
+		None => return Err(Status::Unauthorized),
+	};
 
+	match account.create_post(body, post_input.parent_id).await {
+		Ok(_) => Ok(Redirect::to(match post_input.parent_id {
+			Some(id) => format!("/post/{}", id.0),
+			None => "/".to_string(),
+		})),
+		Err(e) => e.print_and_err(),
+	}
 }
 
 #[get("/delete_post/<post_id>")]
-async fn delete_post(jar: &CookieJar<'_>, post_id: Uuid) -> Result<Redirect, Status> {
+async fn delete_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<Redirect, Status> {
+	let session_data: SessionData = jar.into();
 
-	let userdata: Userdata = jar.into();
-	match userdata.username {
-		Some(username) => {
-			match database::delete_post(&post_id, &username).await {
-				Ok(parent_id) => Ok(Redirect::to(
-					match parent_id {
-						Some(id) => format!("/post/{}", id),
-						None => "/".to_string(),
-					}
-				)),
-				Err(_) => Err(Status::BadRequest)
-			}
-		},
-		None => Err(Status::Unauthorized)
+	let user = match session_data.user {
+		Some(user) => user,
+		None => return Err(Status::Unauthorized),
+	};
+	let post = match Post::find_by_id(post_id).await {
+		Ok(Some(post)) => post,
+		Ok(None) => return Err(Status::NotFound),
+		Err(e) => return e.print_and_err(),
+	};
+	if user.id != post.author_id {
+		return Err(Status::Unauthorized);
 	}
-
+	match post.delete().await {
+		Ok(Some(parent_id)) => Ok(Redirect::to(format!("/post/{}", parent_id.0))),
+		Ok(None) => Ok(Redirect::to("/")),
+		Err(e) => e.print_and_err(),
+	}
 }
 
 #[get("/like_post/<post_id>")]
-async fn like_post(jar: &CookieJar<'_>, post_id: Uuid) -> Status {
+async fn like_post(jar: &CookieJar<'_>, post_id: PostId) -> Status {
+	let session_data: SessionData = jar.into();
 
-	let userdata: Userdata = jar.into();
-	match userdata.username {
-		Some(username) => {
-			match database::like_post(&post_id, &username).await {
-				Ok(true) => Status::Ok,
-				Ok(false) | Err(_) => Status::BadRequest,
-			}
-		},
-		None => Status::Unauthorized
+	let user = match session_data.user {
+		Some(user) => user,
+		None => return Status::Unauthorized,
+	};
+	let account = match Account::find_by_id(user.id).await {
+		Ok(Some(acc)) => acc,
+		Ok(None) => return Status::Unauthorized,
+		Err(e) => return e.print_and_status(),
+	};
+
+	let post = match Post::find_by_id(post_id).await {
+		Ok(Some(post)) => post,
+		Ok(None) => return Status::NotFound,
+		Err(e) => return e.print_and_status(),
+	};
+
+	if post.author_id == account.id {
+		return Status::Forbidden;
 	}
 
+	let liked_by_user = match post.voted_by(account.id).await {
+		Ok(v) => v,
+		Err(e) => return e.print_and_status(),
+	};
+
+	let res = if liked_by_user {
+		account.remove_vote(post.id).await
+	} else {
+		account.add_vote(post.id).await.map(|_| ())
+	};
+	match res {
+		Ok(_) => Status::Ok,
+		Err(e) => e.print_and_status(),
+	}
 }
 
-#[get("/user/<username>")]
-async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<String>, Status> {
-
-	let userdata: Userdata = jar.into();
+#[get("/user/<handle>")]
+async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, Status> {
+	let session_data: SessionData = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
-	// inserting username
-	context.insert("username", &username);
+	// inserting handle
+	context.insert("handle", handle);
 
 	// inserting user data
-	context.insert("userdata", &userdata);
-	
-	// inserting posts
-	let db_posts = match database::get_posts_by_user(100, &username).await {
-		Ok(p) => p,
-		Err(_) => return Err(Status::InternalServerError),
+	context.insert("user", &session_data.user);
+
+	let account = match Account::find_by_handle(handle).await {
+		Ok(Some(acc)) => acc,
+		Ok(None) => return Err(Status::NotFound),
+		Err(e) => return e.print_and_err(),
 	};
-	let posts = match db_posts_to_template_posts(db_posts, &userdata.username).await {
+
+	// inserting posts
+	let posts = match account.get_posts(100, false).await {
 		Ok(p) => p,
-		Err(_) => return Err(Status::InternalServerError),
+		Err(e) => return e.print_and_err(),
+	};
+	let posts = match ReplyTemplatePost::from_posts(posts, &session_data.user).await {
+		Ok(p) => p,
+		Err(e) => return e.print_and_err(),
 	};
 
 	context.insert("posts", &posts);
@@ -356,19 +382,15 @@ async fn get_user(jar: &CookieJar<'_>, username: String) -> Result<RawHtml<Strin
 	// rendering the template
 	match TERA.render("user.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
-		Err(_) => Err(Status::InternalServerError),
+		Err(e) => e.print_and_err(),
 	}
-	
 }
-
-
 
 // accounts
 
 #[get("/login")]
 fn get_login(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, Status> {
-
-	let userdata: Userdata = jar.into();
+	let session_data: SessionData = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
@@ -376,151 +398,133 @@ fn get_login(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, St
 	if let Some(q) = origin.query() {
 		for pair in q.segments() {
 			match pair {
-				("err", "pw") => {
+				("err", "password") => {
 					context.insert("error", "Incorrect password!");
 					break;
-				},
-				("err", "login") => {
-					context.insert("error", "The user with this login doesn't exist");
+				}
+				("err", "handle") => {
+					context.insert("error", "A user with this handle doesn't exist");
 					break;
-				},
+				}
 				(_, _) => (),
 			};
 		}
 	}
 
-	match userdata.username {
-		Some(_) => Err(Status::BadRequest),
-		None => {
-			// inserting user data
-			context.insert("userdata", &userdata);
-
-			// render the template
-			match TERA.render("login.html", &context) {
-				Ok(s) => Ok(RawHtml(s)),
-				Err(_) => Err(Status::InternalServerError)
-			}
-		}
+	if session_data.user.is_some() {
+		return Err(Status::BadRequest);
 	}
 
+	// inserting user data
+	context.insert("user", &session_data.user);
+
+	// render the template
+	match TERA.render("login.html", &context) {
+		Ok(s) => Ok(RawHtml(s)),
+		Err(e) => e.print_and_err(),
+	}
 }
 
 #[post("/login", data = "<login_input>")]
-async fn login(jar: &CookieJar<'_>, login_input: Form<AuthInput>) -> Result<Redirect, status::BadRequest<&'static str>> {
+async fn login(jar: &CookieJar<'_>, login_input: Form<AuthInput<'_>>) -> Result<Redirect, Status> {
+	let (handle, password) = match (login_input.username, login_input.password) {
+		(Some(u), Some(p)) => (u, p),
+		_ => return Err(Status::BadRequest),
+	};
 
-	match database::login(
-		match &login_input.username {
-			Some(u) => u,
-			None => return Err(status::BadRequest(Some("No login provided"))),
-		},
-		match &login_input.password {
-			Some(p) => p,
-			None => return Err(status::BadRequest(Some("No password provided"))),
+	use AccountError::*;
+	match Account::login(handle, password).await {
+		Ok(acc) => {
+			jar.add_private(Cookie::new("id", acc.id.0.to_string()));
+			jar.add_private(Cookie::new("handle", acc.handle));
+			Ok(Redirect::to("/"))
 		}
-	).await {
-		Ok(a) => {
-			match a {
-				Some(acc) => {
-					jar.add_private(Cookie::new("username", acc.username));
-					Ok(Redirect::to("/"))
-				},
-				None => Ok(Redirect::to("/login?err=pw")),
-			}
-		},
-		Err(_) => Ok(Redirect::to("/login?err=login"))
+		Err(Handle(_)) => Ok(Redirect::to("/login?err=handle")),
+		Err(Password(_)) => Ok(Redirect::to("/login?err=password")),
+		Err(Sqlx(e)) => e.print_and_err(),
 	}
-
 }
 
 #[get("/register")]
 fn get_register(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, Status> {
-
 	// creating template context
 	let mut context = Context::new();
-	
+
 	if let Some(q) = origin.query() {
 		for pair in q.segments() {
 			match pair {
-				("err", "pw") => {
+				("err", "password") => {
 					context.insert("error", "Please enter a valid password");
 					break;
-				},
-				("err", "login") => {
-					context.insert("error", "User with this login already exists");
+				}
+				("err", "handle") => {
+					context.insert("error", "A with this handle already exists");
 					break;
-				},
+				}
 				(_, _) => (),
 			};
 		}
 	}
 
-	let userdata: Userdata = jar.into();
+	let session_data: SessionData = jar.into();
 
-	match userdata.username {
-		Some(_) => Err(Status::BadRequest),
-		None => {
-		
-			// inserting user data
-			context.insert("userdata", &userdata);
-
-			match TERA.render("register.html", &context) {
-				Ok(s) => Ok(RawHtml(s)),
-				Err(_) => Err(Status::InternalServerError)
-			}
-			
-		}
+	if session_data.user.is_some() {
+		return Err(Status::BadRequest);
 	}
 
+	// inserting user data
+	context.insert("user", &session_data.user);
+
+	// render the template
+	match TERA.render("register.html", &context) {
+		Ok(s) => Ok(RawHtml(s)),
+		Err(e) => e.print_and_err(),
+	}
 }
 
 #[post("/register", data = "<register_input>")]
-async fn register(jar: &CookieJar<'_>, register_input: Form<AuthInput>) -> Result<Redirect, status::BadRequest<&'static str>> {
+async fn register(
+	jar: &CookieJar<'_>,
+	register_input: Form<AuthInput<'_>>,
+) -> Result<Redirect, Status> {
+	let (handle, password) = match (register_input.username, register_input.password) {
+		(Some(u), Some(p)) => (u, p),
+		_ => return Err(Status::BadRequest),
+	};
 
-	match database::register(
-		match &register_input.username {
-			Some(u) => u,
-			None => return Err(status::BadRequest(Some("No login provided"))),
-		},
-		match &register_input.password {
-			Some(p) => {
-				if p.len() < 8 {
-					return Ok(Redirect::to("/register?err=pw"))
-				}
-				p
-			},
-			None => return Err(status::BadRequest(Some("No password provided"))),
-		}
-	).await {
+	use AccountError::*;
+	match Account::register(handle, password).await {
 		Ok(acc) => {
-			jar.add_private(Cookie::new("username", acc.username));
+			jar.set_user(acc.id, &acc.handle);
 			Ok(Redirect::to("/"))
-		},
-		Err(_) => Ok(Redirect::to("/register?err=login")),
+		}
+		Err(Handle(_)) => Ok(Redirect::to("/register?err=handle")),
+		Err(Password(_)) => Ok(Redirect::to("/register?err=password")),
+		Err(Sqlx(e)) => e.print_and_err(),
 	}
-
 }
 
 #[get("/signout")]
 fn signout(jar: &CookieJar<'_>) -> Redirect {
-
-	jar.remove_private(Cookie::named("username"));
+	jar.remove_user();
 	Redirect::to("/")
-
 }
 
-#[post("/delete_account", data = "<delete_input>")]
-async fn delete_account(jar: &CookieJar<'_>, delete_input: Form<DeleteAccountInput>) -> Redirect {
+#[post("/delete_account")]
+async fn delete_account(jar: &CookieJar<'_>) -> Result<Redirect, Status> {
+	let session_data: SessionData = jar.into();
+	let user = match session_data.user {
+		Some(user) => user,
+		None => return Ok(Redirect::to("/")),
+	};
 
-	let userdata: Userdata = jar.into();
-	match userdata.username {
-		Some(username) => {
-			match database::delete_account(&username, delete_input.preserve_posts).await {
-				Ok(_) => signout(jar),
-				Err(_) => Redirect::to("/"),
-			}
-		},
-		None => Redirect::to("/"),
+	let account = match Account::find_by_id(user.id).await {
+		Ok(Some(acc)) => acc,
+		Ok(None) => return Err(Status::Unauthorized),
+		Err(e) => return e.print_and_err(),
+	};
+	match account.delete().await {
+		Ok(_) => Ok(signout(jar)),
+		Err(e) => e.print_and_err(),
 	}
-
 }
-

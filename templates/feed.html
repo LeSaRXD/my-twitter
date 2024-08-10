@@ -1,3 +1,4 @@
+
 {% extends 'bases/base.html' %}
 
 {% block title %}Homepage{% endblock %}
@@ -10,7 +11,7 @@
 
 <div class="content">
 
-	{% if userdata.username %}
+	{% if user %}
 
 	<form id="create_post_container" method="post" action="/create_post">
 		<h2>Create a post</h2>
@@ -30,3 +31,6 @@
 </div>
 
 {% endblock %}
+
+
+posts

@@ -1,8 +1,7 @@
 use hmac_sha512::Hash;
 use rand::Rng;
 
-pub fn encode_password(password: &String, max_iterations: u8) -> String {
-	
+pub fn encode_password(password: &str, max_iterations: u8) -> [u8; 64] {
 	let mut hasher = Hash::new();
 	hasher.update(password.as_bytes());
 	let mut content = hasher.finalize();
@@ -14,17 +13,15 @@ pub fn encode_password(password: &String, max_iterations: u8) -> String {
 		content = hasher.finalize();
 	}
 
-	hex::encode(content)
-
+	content
 }
 
-pub fn validate_password(password: &String, hash: &String, max_iterations: u8) -> bool {
-	
+pub fn validate_password(password: &str, hash: &[u8], max_iterations: u8) -> bool {
 	let mut hasher = Hash::new();
 	hasher.update(password.as_bytes());
 	let mut content = hasher.finalize();
 	for _ in 0..max_iterations {
-		if &hex::encode(content) == hash {
+		if content == hash {
 			return true;
 		}
 		hasher = Hash::new();
@@ -32,5 +29,4 @@ pub fn validate_password(password: &String, hash: &String, max_iterations: u8) -
 		content = hasher.finalize();
 	}
 	false
-
 }

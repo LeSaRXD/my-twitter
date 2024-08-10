@@ -1,36 +1,4 @@
 # Initializing Database
 
-Initialize postgres database
-
-```
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; 
-
-DROP TABLE IF EXISTS account;
-
-CREATE TABLE account (
-id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
-username VARCHAR(25) UNIQUE NOT NULL,
-password_hash VARCHAR NOT NULL,
-create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-DROP TABLE IF EXISTS post;
-
-CREATE TABLE post (
-id UUID UNIQUE NOT NULL DEFAULT uuid_generate_v4() PRIMARY KEY,
-poster_id UUID NOT NULL,
-body VARCHAR(512) NOT NULL,
-time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-likes INTEGER NOT NULL DEFAULT 0,
-deleted BOOLEAN NOT NULL DEFAULT FALSE,
-is_reply BOOLEAN NOT NULL DEFAULT FALSE,
-parent_id UUID
-);
-
-DROP TABLE IF EXISTS vote;
-
-CREATE TABLE vote (
-	post_id UUID NOT NULL,
-	account_id UUID NOT NULL
-);
-```
+Initialize postgres database:
+`cat init.sql | psql db user`

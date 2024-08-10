@@ -16,13 +16,13 @@
 			<h2>Twitter</h2>
 		</a>
 		<div class="header_item">
-			{% if userdata.username %}
+			{% if user %}
 
 			<form method="post" action="/delete_account">
 				<button type="submit">Delete account</button>
 			</form>
 			<a class="underline" href="/signout">Sign out</a>
-			<a class="handle" href="/user/{{ userdata.username }}">@{{ userdata.username }}</a>
+			<a class="handle" href="/user/{{ user.handle }}">@{{ user.handle }}</a>
 			
 			{% else %}
 

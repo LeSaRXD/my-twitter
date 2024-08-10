@@ -1,25 +1,20 @@
 <div class="post" onclick="window.location = '/post/{{ base_post.id }}'">
+
 	<div class="post_header">
-		{% if base_post.username %}
-		<a href="/user/{{ base_post.username }}" class="handle">@{{ base_post.username }}</a>
-		{% else %}
-		account has been deleted
-		{% endif %}
-		<span class="post_info_container">{{ base_post.time }}</span>
+		<a href="/user/{{ base_post.author_handle }}" class="handle">@{{ base_post.author_name }}</a>
+
+		<span class="post_info_container">{{ base_post.create_time }}</span>
 	</div>
 
 	<div class="post_body">
-		{% if base_post.deleted %}
-		post has been deleted
-		{% else %}
 		<pre>{{ base_post.body }}</pre>
-		{% endif %}
 	</div>
-
-	{% if not base_post.deleted %}
+	
 	<div class="post_footer">
-		{% if userdata.username %}
-		<button class="like_button" data-id="{{ base_post.id }}">
+		
+		<button class="like_button"
+		{% if not user or base_post.author_id == user.id %}disabled{% endif %}
+		data-id="{{ base_post.id }}">
 			{% if base_post.liked_by_user %}
 			<img class="like_icon" src="/static/like_filled.png" />
 			{% else %}
@@ -27,18 +22,13 @@
 			{% endif %}
 			<b class="like_count">{{ base_post.likes }}</b>
 		</button>
-		{% else %}
-		<div class="like_button">
-			<img class="like_icon" src="/static/like_hollow.png" />
-			<b class="like_count">{{ base_post.likes }}</b>
-		</div>
-		{% endif %}
 
-		{% if base_post.username == userdata.username and not base_post.deleted %}
+		{% if user and base_post.author_id == user.id %}
 		<span class="post_info_container">
 			<a href="/delete_post/{{ base_post.id }}">delete</a>
 		</span>
 		{% endif %}
+		
 	</div>
-	{% endif %}
+	
 </div>

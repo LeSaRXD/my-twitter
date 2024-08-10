@@ -1,7 +1,7 @@
 {% set base_post = current_post %}
 {% include 'bases/post.html' %}
 
-{% if userdata.username %}
+{% if user %}
 <hr>
 
 <form id="create_post_container" method="post" action="/create_post">

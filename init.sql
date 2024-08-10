@@ -1,0 +1,43 @@
+CREATE TABLE account (
+	id SERIAL NOT NULL PRIMARY KEY,
+	handle VARCHAR(25) NOT NULL,
+	username VARCHAR(50),
+	password_hash BYTEA NOT NULL,
+	create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX ON account(handle);
+
+
+
+CREATE TABLE post (
+	id BIGSERIAL NOT NULL PRIMARY KEY,
+	author_id INT NOT NULL,
+	body TEXT NOT NULL,
+	create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	parent_id BIGINT
+);
+
+ALTER TABLE post
+ADD FOREIGN KEY (parent_id)
+REFERENCES post(id)
+ON DELETE SET NULL
+ON UPDATE CASCADE;
+
+ALTER TABLE post
+ADD FOREIGN KEY (author_id)
+REFERENCES account(id)
+ON DELETE CASCADE
+ON UPDATE CASCADE;
+
+CREATE INDEX ON post(author_id);
+
+
+
+CREATE TABLE vote (
+	voter_id INT NOT NULL,
+	post_id BIGINT NOT NULL,
+	PRIMARY KEY (voter_id, post_id)
+);
+
+CREATE INDEX ON vote(voter_id);
+CREATE INDEX ON vote(post_id);
