@@ -1,9 +1,8 @@
 use std::num::ParseIntError;
 
+use super::{account::Account, post::Post};
 use rocket::request::FromParam;
 use serde::Serialize;
-
-use super::{Account, Post};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PgU64(pub u64);

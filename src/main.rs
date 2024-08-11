@@ -7,8 +7,9 @@ mod helpers;
 mod timestamps;
 
 use database::{
+	account::{Account, AccountError},
+	post::Post,
 	types::{AccountId, PostId},
-	Account, AccountError, Post,
 };
 use futures::future;
 use helpers::{CookieJarHelper, ErrorHelper};
@@ -139,6 +140,7 @@ fn rocket() -> _ {
 				delete_post,
 				like_post,
 				get_user,
+				get_user_liked,
 				get_login,
 				get_register,
 				login,
@@ -365,6 +367,47 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 
 	// rendering the template
 	match TERA.render("user.html", &context) {
+		Ok(s) => Ok(RawHtml(s)),
+		Err(e) => e.print_and_err(),
+	}
+}
+
+#[get("/user/<handle>/likes")]
+async fn get_user_liked(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, Status> {
+	let session_data: SessionData = jar.into();
+
+	// creating template context
+	let mut context = Context::new();
+
+	// inserting user data
+	context.insert("user", &session_data.user);
+
+	let account = match Account::find_by_handle(handle).await {
+		Ok(Some(acc)) => acc,
+		Ok(None) => return Err(Status::NotFound),
+		Err(e) => return e.print_and_err(),
+	};
+
+	// inserting handle
+	context.insert("account", &account);
+
+	// inserting posts
+	let posts = match account.get_voted_posts().await {
+		Ok(p) => p,
+		Err(e) => return e.print_and_err(),
+	};
+	for post in &posts {
+		println!("{post:?}\n");
+	}
+	let posts = match ReplyTemplatePost::from_posts(posts, &session_data.user).await {
+		Ok(p) => p,
+		Err(e) => return e.print_and_err(),
+	};
+
+	context.insert("posts", &posts);
+
+	// rendering the template
+	match TERA.render("user_liked.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
