@@ -2,6 +2,7 @@ pub mod types;
 
 use crate::crypto;
 use chrono::NaiveDateTime;
+use serde::Serialize;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::{ConnectOptions, PgPool};
 use std::str::FromStr;
@@ -35,6 +36,7 @@ impl<'a> From<sqlx::Error> for AccountError<'a> {
 	}
 }
 
+#[derive(Serialize)]
 pub struct Account {
 	pub id: AccountId,
 	pub handle: String,
@@ -124,13 +126,16 @@ impl Account {
 	pub async fn get_posts(&self, limit: u64, include_replies: bool) -> sqlx::Result<Vec<Post>> {
 		sqlx::query_as!(
 			Post,
-			r#"SELECT *,
-			(SELECT COUNT(*) FROM vote WHERE post_id = id) AS "votes!"
-			FROM post
-			WHERE author_id = $1 AND
+			r#"SELECT p.*,
+			a.handle AS author_handle,
+			a.username AS author_username,
+			(SELECT COUNT(*) FROM vote WHERE post_id = p.id) AS "votes!"
+			FROM post p, account a
+			WHERE a.id = p.author_id AND
+			p.author_id = $1 AND
 			(
-				parent_id IS NULL OR
-				(parent_id IS NOT NULL) = $2
+				p.parent_id IS NULL OR
+				(p.parent_id IS NOT NULL) = $2
 			)
 			ORDER BY create_time DESC
 			LIMIT $3"#,
@@ -149,9 +154,17 @@ impl Account {
 	) -> sqlx::Result<Post> {
 		sqlx::query_as!(
 			Post,
-			r#"INSERT INTO post (author_id, body, parent_id)
-			VALUES ($1, $2, $3)
-			RETURNING *, 0 as "votes!""#,
+			r#"WITH inserted AS (
+				INSERT INTO post (author_id, body, parent_id)
+				VALUES ($1, $2, $3)
+				RETURNING *
+			)
+			SELECT p.*,
+			a.handle AS author_handle,
+			a.username AS author_username,
+			0 as "votes!"
+			FROM inserted p, account a
+			WHERE a.id = p.author_id"#,
 			i32::from(self.id),
 			body,
 			parent_id.map(Into::into),
@@ -202,6 +215,8 @@ impl Account {
 pub struct Post {
 	pub id: PostId,
 	pub author_id: AccountId,
+	pub author_handle: Box<str>,
+	pub author_username: Option<String>,
 	pub body: Box<str>,
 	pub create_time: NaiveDateTime,
 	pub parent_id: OptPostId,
@@ -211,9 +226,12 @@ impl Post {
 	pub async fn find_by_id(post_id: impl Into<i64>) -> sqlx::Result<Option<Self>> {
 		sqlx::query_as!(
 			Post,
-			r#"SELECT *,
-			(SELECT COUNT(*) FROM vote WHERE post_id = id) as "votes!"
-			FROM post WHERE id = $1"#,
+			r#"SELECT p.*,
+			a.handle as author_handle,
+			a.username as author_username,
+			(SELECT COUNT(*) FROM vote WHERE post_id = p.id) as "votes!"
+			FROM post p, account a
+			WHERE p.id = $1 AND a.id = p.author_id"#,
 			post_id.into(),
 		)
 		.fetch_optional(&*POOL)
@@ -222,9 +240,13 @@ impl Post {
 	pub async fn get_recent(limit: u64) -> sqlx::Result<Vec<Self>> {
 		sqlx::query_as!(
 			Post,
-			r#"SELECT *,
-			(SELECT COUNT(*) FROM vote WHERE post_id = id) AS "votes!"
-			FROM post
+			r#"SELECT p.*,
+			a.handle as author_handle,
+			a.username as author_username,
+			(SELECT COUNT(*) FROM vote WHERE post_id = p.id) as "votes!"
+			FROM post p, account a
+			WHERE a.id = p.author_id AND
+			p.parent_id IS NULL
 			ORDER BY create_time DESC
 			LIMIT $1"#,
 			limit as i64,
@@ -255,9 +277,12 @@ impl Post {
 	pub async fn get_replies(&self, limit: u64) -> sqlx::Result<Vec<Post>> {
 		sqlx::query_as!(
 			Post,
-			r#"SELECT *,
-			(SELECT COUNT(*) FROM vote WHERE post_id = id) AS "votes!"
-			FROM post WHERE parent_id = $1
+			r#"SELECT p.*,
+			a.handle as author_handle,
+			a.username as author_username,
+			(SELECT COUNT(*) FROM vote WHERE post_id = p.id) as "votes!"
+			FROM post p, account a
+			WHERE p.parent_id = $1 AND a.id = p.author_id
 			ORDER BY "votes!" DESC
 			LIMIT $2"#,
 			i64::from(self.id),

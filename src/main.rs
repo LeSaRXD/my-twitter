@@ -79,34 +79,26 @@ pub struct BaseTemplatePost {
 }
 
 impl BaseTemplatePost {
-	async fn from_post(post: Post, user: &Option<SessionUser>) -> sqlx::Result<Self> {
-		let author = Account::find_by_id(post.author_id).await?;
-		let author_name = author
-			.as_ref()
-			.map(|acc| acc.display_name())
-			.unwrap_or("Account does not exist")
-			.into();
-		let author_handle = author
-			.map(|a| a.handle)
-			.unwrap_or_default()
-			.into_boxed_str();
-
+	async fn from_post(post: Post, user: &Option<SessionUser>) -> Self {
 		let liked_by_user = match user {
 			Some(u) => post.voted_by(u.id).await.unwrap_or(false),
 			None => false,
 		};
 
-		Ok(Self {
+		Self {
 			id: post.id.0,
 			author_id: post.author_id.0,
-			author_name,
-			author_handle,
+			author_name: post
+				.author_username
+				.map(String::into_boxed_str)
+				.unwrap_or_else(|| post.author_handle.clone()),
+			author_handle: post.author_handle,
 			body: post.body,
 			create_time: timestamps::format_timestamp(post.create_time).into_boxed_str(),
 			likes: post.votes.0,
 			liked_by_user,
 			parent_id: post.parent_id.0.map(Into::into),
-		})
+		}
 	}
 }
 
@@ -120,9 +112,9 @@ impl ReplyTemplatePost {
 		future::join_all(posts.into_iter().map(|post| async {
 			let mut replies = post.get_replies(1).await?;
 			Ok(Self {
-				base: BaseTemplatePost::from_post(post, user).await?,
+				base: BaseTemplatePost::from_post(post, user).await,
 				reply: match replies.pop() {
-					Some(p) => Some(BaseTemplatePost::from_post(p, user).await?),
+					Some(p) => Some(BaseTemplatePost::from_post(p, user).await),
 					None => None,
 				},
 			})
@@ -223,10 +215,7 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 	};
 	context.insert("replies", &replies);
 
-	let template_post = match BaseTemplatePost::from_post(post, &session_data.user).await {
-		Ok(p) => p,
-		Err(e) => return e.print_and_err(),
-	};
+	let template_post = BaseTemplatePost::from_post(post, &session_data.user).await;
 	context.insert("current_post", &template_post);
 
 	// rendering the template
@@ -238,12 +227,7 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 		Some(parent_id) => {
 			// inserting parent
 			let parent_post = match Post::find_by_id(PostId(parent_id)).await {
-				Ok(Some(post)) => {
-					match BaseTemplatePost::from_post(post, &session_data.user).await {
-						Ok(p) => p,
-						Err(e) => return e.print_and_err(),
-					}
-				}
+				Ok(Some(post)) => BaseTemplatePost::from_post(post, &session_data.user).await,
 				Ok(None) => return Err(Status::NotFound),
 				Err(e) => return e.print_and_err(),
 			};
@@ -355,9 +339,6 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 	// creating template context
 	let mut context = Context::new();
 
-	// inserting handle
-	context.insert("handle", handle);
-
 	// inserting user data
 	context.insert("user", &session_data.user);
 
@@ -366,6 +347,9 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
 	};
+
+	// inserting handle
+	context.insert("account", &account);
 
 	// inserting posts
 	let posts = match account.get_posts(100, false).await {
