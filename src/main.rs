@@ -42,6 +42,11 @@ impl SessionUser {
 		})
 	}
 }
+impl From<&SessionUser> for i32 {
+	fn from(value: &SessionUser) -> Self {
+		value.id.into()
+	}
+}
 #[derive(Serialize)]
 struct SessionData {
 	user: Option<SessionUser>,
@@ -78,27 +83,21 @@ pub struct BaseTemplatePost {
 	pub liked_by_user: bool,
 	pub parent_id: Option<u64>,
 }
-
-impl BaseTemplatePost {
-	async fn from_post(post: Post, user: &Option<SessionUser>) -> Self {
-		let liked_by_user = match user {
-			Some(u) => post.voted_by(u.id).await.unwrap_or(false),
-			None => false,
-		};
-
+impl From<Post> for BaseTemplatePost {
+	fn from(value: Post) -> Self {
 		Self {
-			id: post.id.0,
-			author_id: post.author_id.0,
-			author_name: post
+			id: value.id.0,
+			author_id: value.author_id.0,
+			author_name: value
 				.author_username
 				.map(String::into_boxed_str)
-				.unwrap_or_else(|| post.author_handle.clone()),
-			author_handle: post.author_handle,
-			body: post.body,
-			create_time: timestamps::format_timestamp(post.create_time).into_boxed_str(),
-			likes: post.votes.0,
-			liked_by_user,
-			parent_id: post.parent_id.0.map(Into::into),
+				.unwrap_or_else(|| value.author_handle.clone()),
+			author_handle: value.author_handle,
+			body: value.body,
+			create_time: timestamps::format_timestamp(value.create_time).into_boxed_str(),
+			likes: value.votes.0,
+			liked_by_user: value.voted_by_user,
+			parent_id: value.parent_id.0.map(Into::into),
 		}
 	}
 }
@@ -111,13 +110,11 @@ pub struct ReplyTemplatePost {
 impl ReplyTemplatePost {
 	async fn from_posts(posts: Vec<Post>, user: &Option<SessionUser>) -> sqlx::Result<Vec<Self>> {
 		future::join_all(posts.into_iter().map(|post| async {
-			let mut replies = post.get_replies(1).await?;
+			let mut replies = post.get_replies(1, user.as_ref()).await?;
+			let reply = replies.pop().map(Into::into);
 			Ok(Self {
-				base: BaseTemplatePost::from_post(post, user).await,
-				reply: match replies.pop() {
-					Some(p) => Some(BaseTemplatePost::from_post(p, user).await),
-					None => None,
-				},
+				base: post.into(),
+				reply,
 			})
 		}))
 		.await
@@ -163,21 +160,21 @@ fn favicon() -> Redirect {
 
 #[get("/")]
 async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
 	// inserting user data
-	context.insert("user", &session_data.user);
+	context.insert("user", &user);
 
 	// inserting posts
-	let posts = match Post::get_recent(100).await {
+	let posts = match Post::get_recent(100, user.as_ref()).await {
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
 
-	let posts = match ReplyTemplatePost::from_posts(posts, &session_data.user).await {
+	let posts = match ReplyTemplatePost::from_posts(posts, &user).await {
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
@@ -193,32 +190,32 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 
 #[get("/post/<post_id>")]
 async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String>, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user }: SessionData = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
 	// inserting user data
-	context.insert("user", &session_data.user);
+	context.insert("user", &user);
 
 	// inserting post
-	let post = match Post::find_by_id(post_id).await {
+	let post = match Post::find_by_id(post_id, user.as_ref()).await {
 		Ok(Some(p)) => p,
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
 	};
 	// inserting replies
-	let replies = match post.get_replies(100).await {
+	let replies = match post.get_replies(100, user.as_ref()).await {
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
-	let replies = match ReplyTemplatePost::from_posts(replies, &session_data.user).await {
+	let replies = match ReplyTemplatePost::from_posts(replies, &user).await {
 		Ok(r) => r,
 		Err(e) => return e.print_and_err(),
 	};
 	context.insert("replies", &replies);
 
-	let template_post = BaseTemplatePost::from_post(post, &session_data.user).await;
+	let template_post = BaseTemplatePost::from(post);
 	context.insert("current_post", &template_post);
 
 	// rendering the template
@@ -229,8 +226,8 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 		},
 		Some(parent_id) => {
 			// inserting parent
-			let parent_post = match Post::find_by_id(PostId(parent_id)).await {
-				Ok(Some(post)) => BaseTemplatePost::from_post(post, &session_data.user).await,
+			let parent_post = match Post::find_by_id(PostId(parent_id), user.as_ref()).await {
+				Ok(Some(post)) => BaseTemplatePost::from(post),
 				Ok(None) => return Err(Status::NotFound),
 				Err(e) => return e.print_and_err(),
 			};
@@ -247,16 +244,16 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 
 #[get("/post/<post_id>/likes")]
 async fn get_post_likes(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String>, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
 	// inserting user data
-	context.insert("user", &session_data.user);
+	context.insert("user", &user);
 
 	// inserting post
-	let post = match Post::find_by_id(post_id).await {
+	let post = match Post::find_by_id(post_id, user.as_ref()).await {
 		Ok(Some(p)) => p,
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
@@ -269,7 +266,7 @@ async fn get_post_likes(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<
 	context.insert("likes", &likes);
 
 	// inserting base post
-	let base_post = BaseTemplatePost::from_post(post, &session_data.user).await;
+	let base_post: BaseTemplatePost = post.into();
 	context.insert("base_post", &base_post);
 
 	match TERA.render("post_likes.html", &context) {
@@ -280,14 +277,14 @@ async fn get_post_likes(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<
 
 #[post("/create_post", data = "<post_input>")]
 async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result<Redirect, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
 	let body = match &post_input.body {
 		Some(b) => b.as_ref(),
 		None => return Err(Status::BadRequest),
 	};
 
-	let account = match session_data.user {
+	let account = match user {
 		Some(user) => match Account::find_by_id(user.id).await {
 			Ok(Some(acc)) => acc,
 			Ok(None) => return Err(Status::Unauthorized),
@@ -307,13 +304,13 @@ async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result
 
 #[get("/delete_post/<post_id>")]
 async fn delete_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<Redirect, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
-	let user = match session_data.user {
+	let user = match user {
 		Some(user) => user,
 		None => return Err(Status::Unauthorized),
 	};
-	let post = match Post::find_by_id(post_id).await {
+	let post = match Post::find_by_id(post_id, Some(&user)).await {
 		Ok(Some(post)) => post,
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
@@ -330,9 +327,9 @@ async fn delete_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<Redirect, S
 
 #[get("/like_post/<post_id>")]
 async fn like_post(jar: &CookieJar<'_>, post_id: PostId) -> Status {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
-	let user = match session_data.user {
+	let user = match user {
 		Some(user) => user,
 		None => return Status::Unauthorized,
 	};
@@ -342,7 +339,7 @@ async fn like_post(jar: &CookieJar<'_>, post_id: PostId) -> Status {
 		Err(e) => return e.print_and_status(),
 	};
 
-	let post = match Post::find_by_id(post_id).await {
+	let post = match Post::find_by_id(post_id, Some(&user)).await {
 		Ok(Some(post)) => post,
 		Ok(None) => return Status::NotFound,
 		Err(e) => return e.print_and_status(),
@@ -372,13 +369,13 @@ async fn like_post(jar: &CookieJar<'_>, post_id: PostId) -> Status {
 
 #[get("/user/<handle>")]
 async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
 	// inserting user data
-	context.insert("user", &session_data.user);
+	context.insert("user", &user);
 
 	let account = match Account::find_by_handle(handle).await {
 		Ok(Some(acc)) => acc,
@@ -390,11 +387,11 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 	context.insert("account", &account);
 
 	// inserting posts
-	let posts = match account.get_posts(100, false).await {
+	let posts = match account.get_posts(100, false, user.as_ref()).await {
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
-	let posts = match ReplyTemplatePost::from_posts(posts, &session_data.user).await {
+	let posts = match ReplyTemplatePost::from_posts(posts, &user).await {
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
@@ -410,13 +407,13 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 
 #[get("/user/<handle>/likes")]
 async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
 
 	// inserting user data
-	context.insert("user", &session_data.user);
+	context.insert("user", &user);
 
 	let account = match Account::find_by_handle(handle).await {
 		Ok(Some(acc)) => acc,
@@ -428,14 +425,14 @@ async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<Str
 	context.insert("account", &account);
 
 	// inserting posts
-	let posts = match account.get_voted_posts().await {
+	let posts = match account.get_voted_posts(user.as_ref()).await {
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
 	for post in &posts {
 		println!("{post:?}\n");
 	}
-	let posts = match ReplyTemplatePost::from_posts(posts, &session_data.user).await {
+	let posts = match ReplyTemplatePost::from_posts(posts, &user).await {
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
@@ -453,7 +450,7 @@ async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<Str
 
 #[get("/login")]
 fn get_login(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, Status> {
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
 	// creating template context
 	let mut context = Context::new();
@@ -474,12 +471,12 @@ fn get_login(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, St
 		}
 	}
 
-	if session_data.user.is_some() {
+	if user.is_some() {
 		return Err(Status::BadRequest);
 	}
 
 	// inserting user data
-	context.insert("user", &session_data.user);
+	context.insert("user", &user);
 
 	// render the template
 	match TERA.render("login.html", &context) {
@@ -529,14 +526,14 @@ fn get_register(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>,
 		}
 	}
 
-	let session_data: SessionData = jar.into();
+	let SessionData { user } = jar.into();
 
-	if session_data.user.is_some() {
+	if user.is_some() {
 		return Err(Status::BadRequest);
 	}
 
 	// inserting user data
-	context.insert("user", &session_data.user);
+	context.insert("user", &user);
 
 	// render the template
 	match TERA.render("register.html", &context) {
@@ -575,8 +572,8 @@ fn signout(jar: &CookieJar<'_>) -> Redirect {
 
 #[post("/delete_account")]
 async fn delete_account(jar: &CookieJar<'_>) -> Result<Redirect, Status> {
-	let session_data: SessionData = jar.into();
-	let user = match session_data.user {
+	let SessionData { user } = jar.into();
+	let user = match user {
 		Some(user) => user,
 		None => return Ok(Redirect::to("/")),
 	};

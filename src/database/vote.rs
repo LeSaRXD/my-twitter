@@ -39,18 +39,23 @@ impl Post {
 }
 
 impl Account {
-	pub async fn get_voted_posts(&self) -> sqlx::Result<Vec<Post>> {
+	pub async fn get_voted_posts(
+		&self,
+		user_id: Option<impl Into<i32>>,
+	) -> sqlx::Result<Vec<Post>> {
 		sqlx::query_as!(
 			Post,
 			r#"SELECT p.*,
 			a.handle AS author_handle,
 			a.username AS author_username,
-			(SELECT COUNT(*) FROM vote WHERE post_id = p.id) AS "votes!"
+			(SELECT COUNT(*) FROM vote WHERE post_id = p.id) AS "votes!",
+			EXISTS(SELECT * FROM vote WHERE post_id = p.id AND voter_id = $2) as "voted_by_user!"
 			FROM post p, account a
 			WHERE a.id = p.author_id AND
 			p.id IN (SELECT post_id FROM vote WHERE voter_id = $1)
 			"#,
 			i32::from(self.id),
+			user_id.map(Into::into),
 		)
 		.fetch_all(&*POOL)
 		.await
