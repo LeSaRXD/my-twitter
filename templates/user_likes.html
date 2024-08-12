@@ -13,14 +13,10 @@
 	<h2>
 		<a href="/user/{{ account.handle }}" class="handle">
 			@{{ account.handle }}
-		</a> liked
+		</a> likes
 	</h2>
 
-	{% for post in posts %}
-	<hr>
-	{% include 'bases/post_with_reply.html' %}
-
-	{% endfor %}
+	{% include 'bases/posts.html' %}
 
 </div>
 

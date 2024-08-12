@@ -10,10 +10,7 @@
 
 <div class="content">
 
-	<h2>{{ account.username | default(value = account.handle) }}</h2>
-	<a href="/user/{{ account.handle }}" class="handle">
-		@{{ account.handle }}
-	</a>
+	{% include 'bases/account.html' %}
 	
 	{% for post in posts %}
 	<hr>

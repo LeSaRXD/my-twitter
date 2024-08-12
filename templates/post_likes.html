@@ -1,0 +1,20 @@
+{% extends 'bases/base.html' %}
+
+{% block title %}People who liked this post{% endblock %}
+
+{% block styles %}/static/css/feed.css{% endblock %}
+
+{% block content %}
+
+	{% include 'bases/post.html' %}
+
+	<hr>
+
+	{% for account in likes %}
+
+	{% include 'bases/account.html' %}
+	<hr>
+
+	{% endfor %}
+
+{% endblock %}

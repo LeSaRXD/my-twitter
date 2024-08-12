@@ -1,7 +1,9 @@
-:root{
+:root {
 	--accent-color: rgb(36, 193, 255);
 }
-html, body{
+
+html,
+body {
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
@@ -20,16 +22,20 @@ html, body{
 	font-size: 18px;
 }
 
-h1, h2, h3{
+h1,
+h2,
+h3 {
 	margin: 0;
 }
-pre{
+
+pre {
 	margin: inherit;
 	font-size: inherit;
 	font-family: inherit;
 	white-space: pre-wrap;
 }
-button{
+
+button {
 	margin: auto;
 	padding: 5px;
 
@@ -37,18 +43,21 @@ button{
 	color: #fff;
 
 	font-size: inherit;
-	
+
 	border: 1px solid #fff;
 	border-radius: 5px;
 }
-button:hover{
+
+button:hover {
 	background: #333;
 }
-a{
+
+a {
 	color: inherit;
 	text-decoration: inherit;
 }
-input{
+
+input {
 	padding: 5px;
 
 	border: 1px solid #fff;
@@ -59,10 +68,12 @@ input{
 	color: inherit;
 	font-size: 20px;
 }
-input:focus{
+
+input:focus {
 	background: #111;
 }
-textarea{
+
+textarea {
 	resize: none;
 	padding: 0.5rem;
 
@@ -74,31 +85,35 @@ textarea{
 	border: 1px solid #fff;
 	border-radius: 5px;
 }
-hr{
+
+hr {
 	width: calc(100% - 2rem);
 }
-.vr{
+
+.vr {
 	display: flex;
 	align-items: center;
 }
-.vr > hr{
+
+.vr>hr {
 	margin: 0;
 	height: calc(100% - 1rem);
 }
 
-.content{
+.content {
 	flex-grow: 1;
 	overflow-y: auto;
 }
 
-.underline{
+.underline {
 	text-decoration: underline;
 }
-.semitransparent{
+
+.semitransparent {
 	opacity: 0.6;
 }
 
-header{
+header {
 	height: 2rem;
 
 	display: flex;
@@ -111,18 +126,35 @@ header{
 
 	font-size: 1.2rem;
 }
-.header_item{
+
+.header_item {
 	height: inherit;
 
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
 }
-#header_logo{
+
+#header_logo {
 	height: inherit;
 }
 
-.handle{
+.handle {
 	color: var(--accent-color);
 	font-weight: bold;
+}
+
+.account {
+	flex-basis: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0.5rem;
+
+	padding: 8px;
+
+	border: 1px solid #fff;
+	border-radius: 10px;
+
+	background: inherit;
 }

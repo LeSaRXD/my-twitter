@@ -136,11 +136,12 @@ fn rocket() -> _ {
 				favicon,
 				get_feed,
 				get_post,
+				get_post_likes,
 				create_post,
 				delete_post,
 				like_post,
 				get_user,
-				get_user_liked,
+				get_user_likes,
 				get_login,
 				get_register,
 				login,
@@ -244,6 +245,39 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 	}
 }
 
+#[get("/post/<post_id>/likes")]
+async fn get_post_likes(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String>, Status> {
+	let session_data: SessionData = jar.into();
+
+	// creating template context
+	let mut context = Context::new();
+
+	// inserting user data
+	context.insert("user", &session_data.user);
+
+	// inserting post
+	let post = match Post::find_by_id(post_id).await {
+		Ok(Some(p)) => p,
+		Ok(None) => return Err(Status::NotFound),
+		Err(e) => return e.print_and_err(),
+	};
+	// inserting voters
+	let likes = match post.get_voters().await {
+		Ok(v) => v,
+		Err(e) => return e.print_and_err(),
+	};
+	context.insert("likes", &likes);
+
+	// inserting base post
+	let base_post = BaseTemplatePost::from_post(post, &session_data.user).await;
+	context.insert("base_post", &base_post);
+
+	match TERA.render("post_likes.html", &context) {
+		Ok(s) => Ok(RawHtml(s)),
+		Err(e) => e.print_and_err(),
+	}
+}
+
 #[post("/create_post", data = "<post_input>")]
 async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result<Redirect, Status> {
 	let session_data: SessionData = jar.into();
@@ -334,6 +368,8 @@ async fn like_post(jar: &CookieJar<'_>, post_id: PostId) -> Status {
 	}
 }
 
+// users
+
 #[get("/user/<handle>")]
 async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, Status> {
 	let session_data: SessionData = jar.into();
@@ -373,7 +409,7 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 }
 
 #[get("/user/<handle>/likes")]
-async fn get_user_liked(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, Status> {
+async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, Status> {
 	let session_data: SessionData = jar.into();
 
 	// creating template context
@@ -407,7 +443,7 @@ async fn get_user_liked(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<Str
 	context.insert("posts", &posts);
 
 	// rendering the template
-	match TERA.render("user_liked.html", &context) {
+	match TERA.render("user_likes.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
