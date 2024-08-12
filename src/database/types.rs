@@ -4,7 +4,7 @@ use super::{account::Account, post::Post};
 use rocket::request::FromParam;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub struct PgU64(pub u64);
 impl From<u64> for PgU64 {
 	fn from(value: u64) -> Self {

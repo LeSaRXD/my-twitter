@@ -1,4 +1,7 @@
-use super::{types::AccountId, MAX_ITERATIONS, POOL};
+use super::{
+	types::{AccountId, PgU64},
+	MAX_ITERATIONS, POOL,
+};
 use crate::crypto;
 use chrono::NaiveDateTime;
 use serde::Serialize;
@@ -21,18 +24,30 @@ pub struct Account {
 	pub username: Option<String>,
 	pub password_hash: Box<[u8]>,
 	pub create_time: NaiveDateTime,
+	pub following: PgU64,
+	pub followers: PgU64,
 }
 // account actions
 impl Account {
 	pub async fn find_by_id(id: impl Into<i32>) -> sqlx::Result<Option<Self>> {
-		sqlx::query_as!(Account, r#"SELECT * FROM account WHERE id = $1"#, id.into(),)
-			.fetch_optional(&*POOL)
-			.await
+		sqlx::query_as!(
+			Account,
+			r#"SELECT *,
+			(SELECT COUNT(*) FROM follow WHERE user_id = id) AS "following!",
+			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!"
+			FROM account WHERE id = $1"#,
+			id.into(),
+		)
+		.fetch_optional(&*POOL)
+		.await
 	}
 	pub async fn find_by_handle(handle: &str) -> sqlx::Result<Option<Self>> {
 		sqlx::query_as!(
 			Account,
-			r#"SELECT * FROM account WHERE handle = $1"#,
+			r#"SELECT *,
+			(SELECT COUNT(*) FROM follow WHERE user_id = id) AS "following!",
+			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!"
+			FROM account WHERE handle = $1"#,
 			handle,
 		)
 		.fetch_optional(&*POOL)
@@ -44,7 +59,10 @@ impl Account {
 
 		match sqlx::query_as!(
 			Account,
-			r#"SELECT * FROM account WHERE handle = $1"#,
+			r#"SELECT *,
+			(SELECT COUNT(*) FROM follow WHERE user_id = id) AS "following!",
+			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!"
+			FROM account WHERE handle = $1"#,
 			handle,
 		)
 		.fetch_optional(&*POOL)
@@ -73,7 +91,7 @@ impl Account {
 			Account,
 			r#"INSERT INTO account (handle, password_hash)
 			VALUES ($1, $2)
-			RETURNING *"#,
+			RETURNING *, 0 AS "following!", 0 AS "followers!""#,
 			handle,
 			&crypto::encode_password(password, MAX_ITERATIONS)
 		)
