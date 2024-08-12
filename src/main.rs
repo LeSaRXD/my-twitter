@@ -429,13 +429,7 @@ async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<Str
 		Ok(p) => p,
 		Err(e) => return e.print_and_err(),
 	};
-	for post in &posts {
-		println!("{post:?}\n");
-	}
-	let posts = match ReplyTemplatePost::from_posts(posts, &user).await {
-		Ok(p) => p,
-		Err(e) => return e.print_and_err(),
-	};
+	let posts: Vec<BaseTemplatePost> = posts.into_iter().map(Into::into).collect();
 
 	context.insert("posts", &posts);
 
