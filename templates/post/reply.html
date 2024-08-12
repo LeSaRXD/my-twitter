@@ -1,4 +1,4 @@
-{% extends 'bases/base.html' %}
+{% extends 'base/index.html' %}
 
 {% block title %}Tweet by @{{ current_post.author_name }}{% endblock %}
 
@@ -8,7 +8,7 @@
 
 <div class="content">
 	{% set base_post = parent_post %}
-	{% include 'bases/post.html' %}
+	{% include 'base/post.html' %}
 
 	<div class="reply_container" id="current_post">
 		<div class="vr">
@@ -16,7 +16,7 @@
 		</div>
 
 		<div class="replies">
-			{% include 'bases/post_with_replies.html' %}
+			{% include 'base/post_with_replies.html' %}
 		</div>
 	</div>
 </div>

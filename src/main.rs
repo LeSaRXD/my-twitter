@@ -182,7 +182,7 @@ async fn get_feed(jar: &CookieJar<'_>) -> Result<RawHtml<String>, Status> {
 	context.insert("posts", &posts);
 
 	// rendering the template
-	match TERA.render("feed.html", &context) {
+	match TERA.render("post/feed.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
@@ -220,7 +220,7 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 
 	// rendering the template
 	match template_post.parent_id {
-		None => match TERA.render("post.html", &context) {
+		None => match TERA.render("post/index.html", &context) {
 			Ok(s) => Ok(RawHtml(s)),
 			Err(e) => e.print_and_err(),
 		},
@@ -234,7 +234,7 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 
 			context.insert("parent_post", &parent_post);
 
-			match TERA.render("reply_post.html", &context) {
+			match TERA.render("post/reply.html", &context) {
 				Ok(s) => Ok(RawHtml(s)),
 				Err(e) => e.print_and_err(),
 			}
@@ -269,7 +269,7 @@ async fn get_post_likes(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<
 	let base_post: BaseTemplatePost = post.into();
 	context.insert("base_post", &base_post);
 
-	match TERA.render("post_likes.html", &context) {
+	match TERA.render("post/likes.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
@@ -399,7 +399,7 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 	context.insert("posts", &posts);
 
 	// rendering the template
-	match TERA.render("user.html", &context) {
+	match TERA.render("account/index.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
@@ -434,7 +434,7 @@ async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<Str
 	context.insert("posts", &posts);
 
 	// rendering the template
-	match TERA.render("user_likes.html", &context) {
+	match TERA.render("account/likes.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
@@ -473,7 +473,7 @@ fn get_login(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>, St
 	context.insert("user", &user);
 
 	// render the template
-	match TERA.render("login.html", &context) {
+	match TERA.render("user/login.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
@@ -530,7 +530,7 @@ fn get_register(jar: &CookieJar<'_>, origin: &Origin) -> Result<RawHtml<String>,
 	context.insert("user", &user);
 
 	// render the template
-	match TERA.render("register.html", &context) {
+	match TERA.render("user/register.html", &context) {
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}

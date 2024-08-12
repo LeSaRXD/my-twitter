@@ -1,4 +1,4 @@
-{% extends 'bases/base.html' %}
+{% extends 'base/index.html' %}
 
 {% block title %}People who liked this post{% endblock %}
 
@@ -6,15 +6,19 @@
 
 {% block content %}
 
-	{% include 'bases/post.html' %}
+<div class="content">
+
+	{% include 'base/post.html' %}
 
 	<hr>
 
 	{% for account in likes %}
 
-	{% include 'bases/account.html' %}
+	{% include 'base/account.html' %}
 	<hr>
 
 	{% endfor %}
+
+</div>
 
 {% endblock %}

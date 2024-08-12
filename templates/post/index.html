@@ -1,4 +1,4 @@
-{% extends 'bases/base.html' %}
+{% extends 'base/index.html' %}
 
 {% block title %}Tweet by @{{ current_post.author_name }}{% endblock %}
 
@@ -7,7 +7,7 @@
 {% block content %}
 
 <div class="content">
-{% include 'bases/post_with_replies.html' %}
+{% include 'base/post_with_replies.html' %}
 </div>
 
 {% endblock %}

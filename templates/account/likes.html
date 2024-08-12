@@ -1,4 +1,4 @@
-{% extends 'bases/base.html' %}
+{% extends 'base/index.html' %}
 
 {% block title %}@{{ account.handle }}'s liked tweets{% endblock %}
 
@@ -16,7 +16,7 @@
 		</a> likes
 	</h2>
 
-	{% include 'bases/posts.html' %}
+	{% include 'base/posts.html' %}
 
 </div>
 

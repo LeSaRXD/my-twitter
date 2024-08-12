@@ -1,5 +1,5 @@
 {% set base_post = current_post %}
-{% include 'bases/post.html' %}
+{% include 'base/post.html' %}
 
 {% if user %}
 <hr>
@@ -23,7 +23,7 @@
 		<hr>
 
 		{% set post = reply %}
-		{% include 'bases/post_with_reply.html' %}
+		{% include 'base/post_with_reply.html' %}
 
 		{% endfor %}
 	</div>
