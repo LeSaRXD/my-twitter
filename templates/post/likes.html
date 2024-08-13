@@ -1,24 +1,26 @@
-{% extends 'base/index.html' %}
+{% extends 'base/post.html' %}
 
-{% block title %}People who liked this post{% endblock %}
+{% block title %}People who liked this tweet{% endblock %}
 
-{% block styles %}/static/css/feed.css{% endblock %}
 
-{% block content %}
 
-<div class="content">
+{% block panels %}
 
-	{% include 'base/post.html' %}
+{% for title in panel_titles %}
+	<a 
+	{% if loop.index0 == 1 %}class="selected"{% endif %}
+	href="{{ panel_urls[loop.index0] }}">{{ title }}</a>
+{% endfor %}
 
-	<hr>
+{% endblock %}
 
-	{% for account in likes %}
 
-	{% include 'base/account.html' %}
-	<hr>
 
-	{% endfor %}
+{% block below_post %}
 
-</div>
+{% for account in likes %}
+{% include 'base/account.html' %}
+<hr>
+{% endfor %}
 
 {% endblock %}

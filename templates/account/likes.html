@@ -16,7 +16,10 @@
 		</a> likes
 	</h2>
 
-	{% include 'base/posts.html' %}
+	{% for base_post in posts %}
+		{% include 'base/base_post.html' %}
+		<hr>
+	{% endfor %}
 
 </div>
 

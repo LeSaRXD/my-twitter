@@ -19,13 +19,23 @@ use rocket::{
 	http::{uri::Origin, Cookie, CookieJar, Status},
 	response::{content::RawHtml, Redirect},
 };
-use rocket_dyn_templates::tera::{Context, Tera};
+use rocket_dyn_templates::tera::{Context, ErrorKind, Tera};
 use serde::Serialize;
 use std::sync::LazyLock;
 
 // global constants
-static TERA: LazyLock<Tera> = LazyLock::new(|| {
-	Tera::new("./templates/**/*.html").expect("Could not load templates from ./templates")
+static TERA: LazyLock<Tera> = LazyLock::new(|| match Tera::new("./templates/**/*.html") {
+	Ok(t) => t,
+	Err(e) => {
+		panic!(
+			"Could not load templates from ./templates\n{}",
+			if let ErrorKind::Msg(m) = e.kind {
+				m.to_string()
+			} else {
+				e.to_string()
+			}
+		);
+	}
 });
 
 // session structs
@@ -126,6 +136,8 @@ impl ReplyTemplatePost {
 
 #[launch]
 fn rocket() -> _ {
+	let _ = &*TERA;
+
 	rocket::build()
 		.mount(
 			"/",
@@ -215,11 +227,11 @@ async fn get_post(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<String
 	};
 	context.insert("replies", &replies);
 
-	let template_post = BaseTemplatePost::from(post);
-	context.insert("current_post", &template_post);
+	let post: BaseTemplatePost = post.into();
+	context.insert("base_post", &post);
 
 	// rendering the template
-	match template_post.parent_id {
+	match post.parent_id {
 		None => match TERA.render("post/index.html", &context) {
 			Ok(s) => Ok(RawHtml(s)),
 			Err(e) => e.print_and_err(),

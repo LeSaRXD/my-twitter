@@ -38,6 +38,7 @@ pre {
 button {
 	margin: auto;
 	padding: 5px;
+	cursor: pointer;
 
 	background: #000;
 	color: #fff;
