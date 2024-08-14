@@ -1,4 +1,5 @@
 pub mod account;
+pub mod follow;
 pub mod post;
 pub mod types;
 pub mod vote;

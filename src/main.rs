@@ -151,12 +151,14 @@ fn rocket() -> _ {
 				like_post,
 				get_user,
 				get_user_likes,
+				follow_user,
+				unfollow_user,
 				get_login,
 				get_register,
 				login,
 				register,
 				signout,
-				delete_account
+				delete_account,
 			],
 		)
 		.mount("/static", FileServer::from("./static"))
@@ -450,6 +452,56 @@ async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<Str
 		Ok(s) => Ok(RawHtml(s)),
 		Err(e) => e.print_and_err(),
 	}
+}
+
+async fn follow_or_unfollow(
+	jar: &CookieJar<'_>,
+	handle: &str,
+	follow: bool,
+) -> Result<Redirect, Status> {
+	let SessionData { user } = jar.into();
+
+	let id = match user {
+		Some(user) => user.id,
+		None => return Err(Status::Unauthorized),
+	};
+
+	let account = match Account::find_by_id(id).await {
+		Ok(Some(acc)) => acc,
+		Ok(None) => return Err(Status::NotFound),
+		Err(e) => return e.print_and_err(),
+	};
+
+	let to_follow = match Account::find_by_handle(handle).await {
+		Ok(Some(acc)) => acc,
+		Ok(None) => return Err(Status::NotFound),
+		Err(e) => return e.print_and_err(),
+	};
+
+	if account.id == to_follow.id {
+		return Err(Status::Forbidden);
+	}
+
+	let result = if follow {
+		account.follow(to_follow.id).await.map(|_| ())
+	} else {
+		account.unfollow(to_follow.id).await
+	};
+
+	match result {
+		Ok(()) => Ok(Redirect::to(format!("/user/{handle}"))),
+		Err(e) => e.print_and_err(),
+	}
+}
+
+#[get("/user/<handle>/follow")]
+async fn follow_user(jar: &CookieJar<'_>, handle: &str) -> Result<Redirect, Status> {
+	follow_or_unfollow(jar, handle, true).await
+}
+
+#[get("/user/<handle>/unfollow")]
+async fn unfollow_user(jar: &CookieJar<'_>, handle: &str) -> Result<Redirect, Status> {
+	follow_or_unfollow(jar, handle, false).await
 }
 
 // accounts
