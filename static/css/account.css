@@ -1,0 +1,60 @@
+@import url("/static/css/base.css");
+@import url("/static/css/post.css");
+
+.account {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
+}
+
+.account * {
+	margin: 0;
+	display: flex;
+	flex-direction: row;
+	gap: 0.5rem;
+}
+
+.account>* {
+	justify-content: space-between;
+}
+
+.account>*>* {
+	justify-self: flex-start;
+}
+
+.account_header>* {
+	align-items: center;
+}
+
+.account_footer>* {
+	gap: 1rem;
+}
+
+.account_footer>*>* {
+	gap: 0.2rem;
+}
+
+button.round {
+	border-radius: 1000vw;
+}
+
+button.filled {
+	border: 1px solid #fff;
+	background-color: #fff;
+	color: #000;
+}
+
+button.filled:hover {
+	background-color: #ccc;
+}
+
+button.hollow {
+	border: 1px solid #fff;
+	background-color: #000;
+	color: #fff;
+}
+
+button.hollow:hover {
+	background-color: #333;
+}

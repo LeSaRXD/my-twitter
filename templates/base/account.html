@@ -1,10 +1,24 @@
 <div class="account">
-	<h2>{{ account.username | default(value = account.handle) }}</h2>
+	<div class="account_header">
+		<div>
+			<h2>{{ account.username | default(value = account.handle) }}</h2>
+			<button class="round {% if account.followed_by_user %}hollow{% else %}filled{% endif %}">
+				{% if account.followed_by_user %}
+				Unfollow
+				{% else %}
+				Follow
+				{% endif %}
+			</button>
+		</div>
+		<button class="round filled">…</button>
+	</div>
 	<a href="/user/{{ account.handle }}" class="handle">
 		@{{ account.handle }}
 	</a>
-	<div class="follow_counts">
-		<span><b>{{ account.following }}</b> following</span>
-		<span><b>{{ account.followers }}</b> follower{% if account.followers != 1 %}s{% endif %}</span>
+	<div class="account_footer">
+		<div class="account_follows">
+			<span><b>{{ account.following }}</b> following</span>
+			<span><b>{{ account.followers }}</b> follower{% if account.followers != 1 %}s{% endif %}</span>
+		</div>
 	</div>
 </div>
