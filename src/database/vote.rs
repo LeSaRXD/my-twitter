@@ -11,14 +11,16 @@ pub struct Vote {
 }
 
 impl Post {
-	pub async fn get_voters(&self) -> sqlx::Result<Vec<Account>> {
+	pub async fn get_voters(&self, user_id: Option<impl Into<i32>>) -> sqlx::Result<Vec<Account>> {
 		sqlx::query_as!(
 			Account,
 			r#"SELECT *,
 			(SELECT COUNT(*) FROM follow WHERE user_id = id) AS "following!",
-			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!"
+			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!",
+			EXISTS(SELECT * FROM follow WHERE user_id = $1 AND followed_id = id) AS "followed_by_user!"
 			FROM account
-			WHERE id IN (SELECT voter_id FROM vote WHERE post_id = $1)"#,
+			WHERE id IN (SELECT voter_id FROM vote WHERE post_id = $2)"#,
+			user_id.map(Into::into),
 			i64::from(self.id),
 		)
 		.fetch_all(&*POOL)

@@ -26,28 +26,39 @@ pub struct Account {
 	pub create_time: NaiveDateTime,
 	pub following: PgU64,
 	pub followers: PgU64,
+	pub followed_by_user: bool,
 }
 // account actions
 impl Account {
-	pub async fn find_by_id(id: impl Into<i32>) -> sqlx::Result<Option<Self>> {
+	pub async fn find_by_id(
+		id: impl Into<i32>,
+		user_id: Option<impl Into<i32>>,
+	) -> sqlx::Result<Option<Self>> {
 		sqlx::query_as!(
 			Account,
 			r#"SELECT *,
 			(SELECT COUNT(*) FROM follow WHERE user_id = id) AS "following!",
-			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!"
-			FROM account WHERE id = $1"#,
+			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!",
+			EXISTS(SELECT * FROM follow WHERE user_id = $1 AND followed_id = id) AS "followed_by_user!"
+			FROM account WHERE id = $2"#,
+			user_id.map(Into::into),
 			id.into(),
 		)
 		.fetch_optional(&*POOL)
 		.await
 	}
-	pub async fn find_by_handle(handle: &str) -> sqlx::Result<Option<Self>> {
+	pub async fn find_by_handle(
+		handle: &str,
+		user_id: Option<impl Into<i32>>,
+	) -> sqlx::Result<Option<Self>> {
 		sqlx::query_as!(
 			Account,
 			r#"SELECT *,
 			(SELECT COUNT(*) FROM follow WHERE user_id = id) AS "following!",
-			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!"
-			FROM account WHERE handle = $1"#,
+			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!",
+			EXISTS(SELECT * FROM follow WHERE user_id = $1 AND followed_id = id) AS "followed_by_user!"
+			FROM account WHERE handle = $2"#,
+			user_id.map(Into::into),
 			handle,
 		)
 		.fetch_optional(&*POOL)
@@ -61,7 +72,8 @@ impl Account {
 			Account,
 			r#"SELECT *,
 			(SELECT COUNT(*) FROM follow WHERE user_id = id) AS "following!",
-			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!"
+			(SELECT COUNT(*) FROM follow WHERE followed_id = id) AS "followers!",
+			FALSE AS "followed_by_user!"
 			FROM account WHERE handle = $1"#,
 			handle,
 		)
@@ -91,7 +103,10 @@ impl Account {
 			Account,
 			r#"INSERT INTO account (handle, password_hash)
 			VALUES ($1, $2)
-			RETURNING *, 0 AS "following!", 0 AS "followers!""#,
+			RETURNING *,
+			0 AS "following!",
+			0 AS "followers!",
+			FALSE AS "followed_by_user!""#,
 			handle,
 			&crypto::encode_password(password, MAX_ITERATIONS)
 		)

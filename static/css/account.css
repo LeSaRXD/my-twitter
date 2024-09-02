@@ -35,26 +35,30 @@
 	gap: 0.2rem;
 }
 
-button.round {
+.padding {
+	padding: 0.25rem;
+}
+
+.round {
 	border-radius: 1000vw;
 }
 
-button.filled {
+.filled {
 	border: 1px solid #fff;
 	background-color: #fff;
 	color: #000;
 }
 
-button.filled:hover {
+.filled:hover {
 	background-color: #ccc;
 }
 
-button.hollow {
+.hollow {
 	border: 1px solid #fff;
 	background-color: #000;
 	color: #fff;
 }
 
-button.hollow:hover {
+.hollow:hover {
 	background-color: #333;
 }

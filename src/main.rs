@@ -273,7 +273,7 @@ async fn get_post_likes(jar: &CookieJar<'_>, post_id: PostId) -> Result<RawHtml<
 		Err(e) => return e.print_and_err(),
 	};
 	// inserting voters
-	let likes = match post.get_voters().await {
+	let likes = match post.get_voters(user.as_ref()).await {
 		Ok(v) => v,
 		Err(e) => return e.print_and_err(),
 	};
@@ -298,13 +298,14 @@ async fn create_post(jar: &CookieJar<'_>, post_input: Form<PostInput>) -> Result
 		None => return Err(Status::BadRequest),
 	};
 
-	let account = match user {
-		Some(user) => match Account::find_by_id(user.id).await {
-			Ok(Some(acc)) => acc,
-			Ok(None) => return Err(Status::Unauthorized),
-			Err(e) => return e.print_and_err(),
-		},
+	let user = match user {
+		Some(user) => user,
 		None => return Err(Status::Unauthorized),
+	};
+	let account = match Account::find_by_id(user.id, None::<i32>).await {
+		Ok(Some(acc)) => acc,
+		Ok(None) => return Err(Status::Unauthorized),
+		Err(e) => return e.print_and_err(),
 	};
 
 	match account.create_post(body, post_input.parent_id).await {
@@ -347,7 +348,7 @@ async fn like_post(jar: &CookieJar<'_>, post_id: PostId) -> Status {
 		Some(user) => user,
 		None => return Status::Unauthorized,
 	};
-	let account = match Account::find_by_id(user.id).await {
+	let account = match Account::find_by_id(user.id, None::<i32>).await {
 		Ok(Some(acc)) => acc,
 		Ok(None) => return Status::Unauthorized,
 		Err(e) => return e.print_and_status(),
@@ -391,7 +392,7 @@ async fn get_user(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<String>, 
 	// inserting user data
 	context.insert("user", &user);
 
-	let account = match Account::find_by_handle(handle).await {
+	let account = match Account::find_by_handle(handle, user.as_ref()).await {
 		Ok(Some(acc)) => acc,
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
@@ -429,7 +430,7 @@ async fn get_user_likes(jar: &CookieJar<'_>, handle: &str) -> Result<RawHtml<Str
 	// inserting user data
 	context.insert("user", &user);
 
-	let account = match Account::find_by_handle(handle).await {
+	let account = match Account::find_by_handle(handle, user.as_ref()).await {
 		Ok(Some(acc)) => acc,
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
@@ -461,18 +462,18 @@ async fn follow_or_unfollow(
 ) -> Result<Redirect, Status> {
 	let SessionData { user } = jar.into();
 
-	let id = match user {
-		Some(user) => user.id,
+	let user = match user {
+		Some(user) => user,
 		None => return Err(Status::Unauthorized),
 	};
 
-	let account = match Account::find_by_id(id).await {
+	let account = match Account::find_by_id(user.id, Some(&user)).await {
 		Ok(Some(acc)) => acc,
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
 	};
 
-	let to_follow = match Account::find_by_handle(handle).await {
+	let to_follow = match Account::find_by_handle(handle, Some(&user)).await {
 		Ok(Some(acc)) => acc,
 		Ok(None) => return Err(Status::NotFound),
 		Err(e) => return e.print_and_err(),
@@ -631,12 +632,13 @@ fn signout(jar: &CookieJar<'_>) -> Redirect {
 #[post("/delete_account")]
 async fn delete_account(jar: &CookieJar<'_>) -> Result<Redirect, Status> {
 	let SessionData { user } = jar.into();
+
 	let user = match user {
 		Some(user) => user,
 		None => return Ok(Redirect::to("/")),
 	};
 
-	let account = match Account::find_by_id(user.id).await {
+	let account = match Account::find_by_id(user.id, None::<i32>).await {
 		Ok(Some(acc)) => acc,
 		Ok(None) => return Err(Status::Unauthorized),
 		Err(e) => return e.print_and_err(),
